@@ -2,6 +2,9 @@
 
 wasm_target := "wasm32-unknown-unknown"
 
+# Runs wasm32-wasip1 test/example binaries under Node (V8, same engine as Workers)
+export CARGO_TARGET_WASM32_WASIP1_RUNNER := "node --no-warnings " + justfile_directory() + "/scripts/wasi-run.mjs"
+
 # List available tasks
 default:
     @just --list
@@ -24,9 +27,20 @@ build-wasm:
     rustup target add {{wasm_target}}
     cargo build -p pushharbor-core -p pushharbor-worker --target {{wasm_target}}
 
+# Run core tests compiled to wasm under Node (needs node >= 20)
+test-wasm:
+    rustup target add wasm32-wasip1
+    cargo test -p pushharbor-core --target wasm32-wasip1
+
+# Time vapid::verify natively and as wasm under Node
+bench-vapid:
+    cargo run -q --release -p pushharbor-core --example vapid_bench
+    rustup target add wasm32-wasip1
+    cargo run -q --release -p pushharbor-core --example vapid_bench --target wasm32-wasip1
+
 # Run the native server
 run-native *args:
     cargo run -p pushharbor-native -- {{args}}
 
 # Everything CI runs
-ci: lint test build-wasm
+ci: lint test test-wasm build-wasm

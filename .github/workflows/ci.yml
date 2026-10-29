@@ -15,10 +15,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32-wasip1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo test -p pushharbor-core --target wasm32-wasip1
+        env:
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: node --no-warnings ${{ github.workspace }}/scripts/wasi-run.mjs
       - run: cargo build -p pushharbor-core -p pushharbor-worker --target wasm32-unknown-unknown
