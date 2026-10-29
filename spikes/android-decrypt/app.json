@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Pushharbor Spike",
+    "slug": "pushharbor-android-spike",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "dev.pushharbor.testapp",
+      "googleServicesFile": "./google-services.json"
+    },
+    "platforms": [
+      "android"
+    ]
+  }
+}
