@@ -21,7 +21,8 @@
     "subscription": "adb shell run-as dev.pushharbor.testapp cat files/subscription.json > subscription.json",
     "send": "node scripts/send.mjs subscription.json",
     "test:android": "cd android && ./gradlew :pushharbor-spike:testDebugUnitTest",
-    "measure-cap": "node scripts/measure-cap.mjs"
+    "measure-cap": "node scripts/measure-cap.mjs",
+    "challenge": "node scripts/challenge.mjs"
   },
   "private": true
 }

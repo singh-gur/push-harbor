@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Receives FCM data messages `{ p: base64url(aes128gcm body) }`, decrypts them natively and posts a
@@ -19,6 +21,7 @@ import org.json.JSONObject
  */
 class PushService : FirebaseMessagingService() {
   override fun onMessageReceived(message: RemoteMessage) {
+    message.data["c"]?.let { return answerChallenge(it, message.data["e"]) }
     val payload = message.data["p"] ?: return Store.record(this, "ignored")
     val keys = Store.keys(this)
     val envelope = try {
@@ -29,6 +32,28 @@ class PushService : FirebaseMessagingService() {
       return Store.record(this, "dropped")
     }
     show(envelope.optString("t"), envelope.optString("b"))
+  }
+
+  /**
+   * PH-18 spike: proves the device holds this FID by POSTing the challenge nonce back.
+   * shortcut: the echo URL comes from the message only for the spike; the real module (PH-7) uses
+   * its configured relay URL and only answers challenges for a registration it started.
+   */
+  private fun answerChallenge(nonce: String, echoUrl: String?) {
+    val outcome = try {
+      val conn = URL(echoUrl).openConnection() as HttpURLConnection
+      conn.requestMethod = "POST"
+      conn.connectTimeout = 5000
+      conn.readTimeout = 5000
+      conn.doOutput = true
+      conn.setRequestProperty("Content-Type", "application/json")
+      conn.outputStream.use { it.write("""{"c":"$nonce"}""".toByteArray()) }
+      if (conn.responseCode in 200..299) "challenge-answered" else "challenge-rejected"
+    } catch (e: Exception) {
+      Log.w(TAG, "challenge answer failed: ${e.javaClass.simpleName}")
+      "challenge-failed"
+    }
+    Store.record(this, outcome)
   }
 
   override fun onRegistered(installationId: String) {
