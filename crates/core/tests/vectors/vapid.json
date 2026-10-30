@@ -1,5 +1,5 @@
 {
-  "source": "web-push 3.6.7",
+  "source": "web-push 3.6.7 unless a vector names its own source",
   "sub": "mailto:ops@example.com",
   "vectors": [
     {
@@ -65,6 +65,46 @@
       "now": 1793334977,
       "max_lifetime": 86400,
       "expect": "NotVapid"
+    },
+    {
+      "name": "web-push 3.6.7 (Node) real header",
+      "source": "web-push 3.6.7 (Node)",
+      "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovLzEyNy4wLjAuMTo4ODk4IiwiZXhwIjoxNzkzNDE4NjEyLCJzdWIiOiJtYWlsdG86c3VydmV5QGV4YW1wbGUuY29tIn0.W0rZqTft5c26sqkQfRlDID6I7CI_srIqSuVB-r7LDRokXCsoiVTPdEgudVXk6A6R_FcjbLh4NoC2120aRxo2xQ, k=BGK-UHH41sJ68VXtoj9DO3y_VeiOznsTaSLiBoxmA9mPx0HFKLrn0QekQTFsIN0b7-ZqNO5xdHeiwv2y4gXBJMM",
+      "audience": "https://127.0.0.1:8898",
+      "now": 1793375412,
+      "max_lifetime": 86400,
+      "expect": "ok",
+      "sub": "mailto:survey@example.com"
+    },
+    {
+      "name": "pywebpush 2.5.0 real header",
+      "source": "pywebpush 2.5.0",
+      "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xOjg4OTkiLCJleHAiOjE3OTM0MTg2MTIsInN1YiI6Im1haWx0bzpzdXJ2ZXlAZXhhbXBsZS5jb20ifQ.DYQxsNnZ4GhSo27GWm8o_qMRr9PnV3j-hT8iflsMf5jsda5HuM88Ok4_0Wl0LvYlLrMgGgXGQqS9vIGbw2UgcQ,k=BNBI4-IO7VKu_RPGZQqRq0yw_3faAZYX6jgAlKASBE1-vpmAe8h3KKkY88hm1SE_IvT5bcKibm8w2izLRVHjk4o",
+      "audience": "http://127.0.0.1:8899",
+      "now": 1793375412,
+      "max_lifetime": 86400,
+      "expect": "ok",
+      "sub": "mailto:survey@example.com"
+    },
+    {
+      "name": "webpush-go v1.4.0 real header",
+      "source": "webpush-go v1.4.0",
+      "authorization": "vapid t=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xOjg4OTkiLCJleHAiOjE3OTM0MTg2MTIsInN1YiI6Im1haWx0bzpzdXJ2ZXlAZXhhbXBsZS5jb20ifQ.VuYR3iGLAQTA685EbUtXQk14cSgtYNXgIQwej0KgRJX1LPflhNZDGY7xN0nic2pnomWgzjKad6rPFUYrxzcWUg, k=BA488zulUJv3AovLRseOT4gBdRWRdMSXjQ8X8Tp4tKxSC9vZ_V4CpARjsu6z2JneKus-r3CQcS_Mk1rO1ipVnz8",
+      "audience": "http://127.0.0.1:8899",
+      "now": 1793375412,
+      "max_lifetime": 86400,
+      "expect": "ok",
+      "sub": "mailto:survey@example.com"
+    },
+    {
+      "name": "web-push-php v11.0.0 real header",
+      "source": "web-push-php v11.0.0",
+      "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xIiwiZXhwIjoxNzkzNDE4NjEzLCJzdWIiOiJtYWlsdG86c3VydmV5QGV4YW1wbGUuY29tIn0.h2j8R9GKFY0V2Xw5JgLDQOXfWSbeLsi2dn2HMlD1U6x9-3Cj7FAQQZwzqpqZiCa7IRYC30vN9hKjGDLoCQenlg, k=BNcvrrkAkzdvg4kTwEb00AG6HliR-FyKDiO8gzVr6_TOk9Q85mlny3I2DwSeDPT5vlFiwIMNsQ2-m3Ou7gcGK3Y",
+      "audience": "http://127.0.0.1",
+      "now": 1793375413,
+      "max_lifetime": 86400,
+      "expect": "ok",
+      "sub": "mailto:survey@example.com"
     }
   ]
 }

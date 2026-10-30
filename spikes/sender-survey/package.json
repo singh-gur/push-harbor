@@ -1,0 +1,12 @@
+{
+  "name": "pushharbor-sender-survey",
+  "version": "1.0.0",
+  "description": "PH-25: Web Push sender library survey",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "http_ece": "1.2.1",
+    "web-push": "3.6.7"
+  },
+  "private": true
+}
