@@ -1,0 +1,18 @@
+{
+  "name": "pushharbor-worker-fcm-spike",
+  "version": "1.0.0",
+  "description": "PH-21 spike: Worker -> FCM HTTP v1",
+  "scripts": {
+    "dev-vars": "node scripts/dev-vars.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "send": "node scripts/send.mjs"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "web-push": "^3.6.7",
+    "wrangler": "^4.156.0"
+  },
+  "private": true
+}

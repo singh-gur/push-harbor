@@ -1,5 +1,6 @@
 package dev.pushharbor.spike
 
+import com.google.firebase.installations.FirebaseInstallations
 import com.google.firebase.messaging.FirebaseMessaging
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -19,20 +20,22 @@ class PushharborSpikeModule : Module() {
     }
 
     /**
-     * FCM registration token. Also writes the full subscription to `files/subscription.json` so a
-     * debug build can be read with `adb shell run-as <pkg> cat files/subscription.json` (no logging).
+     * Registers with FCM by Firebase Installation ID and returns the FID. Also writes the subscription
+     * to `files/subscription.json` so a debug build can be read with
+     * `adb shell run-as <pkg> cat files/subscription.json` (no logging).
+     *
+     * With `firebase_messaging_installation_id_enabled` the legacy getToken() is disabled; HTTP v1
+     * targets the FID with the `fid` field.
      */
     AsyncFunction("getToken") { promise: Promise ->
-      // shortcut: getToken() is deprecated since firebase-messaging 25.1 in favour of register()/onRegistered (FID);
-      // still works, and how to send to an FID via the HTTP v1 API is open (PH-21/PH-10).
-      @Suppress("DEPRECATION")
-      FirebaseMessaging.getInstance().token
-        .addOnSuccessListener { token ->
+      FirebaseMessaging.getInstance().register()
+        .continueWithTask { FirebaseInstallations.getInstance().id }
+        .addOnSuccessListener { fid ->
           val keys = Store.keys(context)
           File(context.filesDir, "subscription.json").writeText(
-            """{"token":"$token","p256dh":"${b64url(keys.public)}","auth":"${b64url(keys.auth)}"}""",
+            """{"fid":"$fid","p256dh":"${b64url(keys.public)}","auth":"${b64url(keys.auth)}"}""",
           )
-          promise.resolve(token)
+          promise.resolve(fid)
         }
         .addOnFailureListener { e -> promise.reject("ERR_FCM_TOKEN", e.message, e) }
     }

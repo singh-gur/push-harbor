@@ -1,0 +1,21 @@
+name = "pushharbor-worker-fcm-spike"
+main = "build/index.js"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build@^0.8 && worker-build --release"
+
+[vars]
+# VAPID `aud` senders must use; for a deployment set it to the workers.dev origin.
+RELAY_ORIGIN = "http://localhost:8787"
+
+[[durable_objects.bindings]]
+name = "FCM_TOKEN"
+class_name = "FcmToken"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FcmToken"]
+
+[observability]
+enabled = true

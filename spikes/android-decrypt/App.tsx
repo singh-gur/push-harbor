@@ -18,7 +18,7 @@ export default function App() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.h}>Pushharbor Android spike (PH-20)</Text>
-      <Text style={styles.label}>FCM token</Text>
+      <Text style={styles.label}>FCM installation ID (FID)</Text>
       <Text selectable style={styles.mono}>{token}</Text>
       <Text style={styles.label}>p256dh</Text>
       <Text selectable style={styles.mono}>{keys.p256dh}</Text>

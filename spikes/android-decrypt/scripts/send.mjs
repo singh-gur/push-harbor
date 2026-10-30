@@ -38,7 +38,9 @@ const { access_token } = await post(
   new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
 );
 
-const message = { token: sub.token, data: { p: b64(cipherText) }, android: { priority: "HIGH" } };
+// FID-registered apps are targeted with `fid`; older subscriptions carry a registration `token`.
+const target = sub.fid ? { fid: sub.fid } : { token: sub.token };
+const message = { ...target, data: { p: b64(cipherText) }, android: { priority: "HIGH" } };
 const res = await post(
   `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
   JSON.stringify({ message }),

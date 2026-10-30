@@ -36,6 +36,8 @@ object Store {
     return Keys(private, unb64url(p.getString("public", null)!!), unb64url(p.getString("auth", null)!!))
   }
 
+  fun setFid(context: Context, fid: String) = prefs(context).edit().putString("fid", fid).commit()
+
   @Synchronized
   fun record(context: Context, outcome: String) {
     val p = prefs(context)

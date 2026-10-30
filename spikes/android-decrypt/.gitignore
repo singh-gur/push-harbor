@@ -47,3 +47,4 @@ subscription.json
 
 # Gradle output of the local module
 modules/*/android/build/
+subscription-*.json

@@ -31,10 +31,11 @@ class PushService : FirebaseMessagingService() {
     show(envelope.optString("t"), envelope.optString("b"))
   }
 
-  @Deprecated("FCM moves to onRegistered (FID); kept while the spike uses getToken()")
-  override fun onNewToken(token: String) {
-    Log.i(TAG, "FCM token rotated")
+  override fun onRegistered(installationId: String) {
+    Store.setFid(this, installationId)
+    Log.i(TAG, "FCM registered by installation ID")
   }
+
 
   private fun show(title: String, body: String) {
     if (Build.VERSION.SDK_INT >= 33 &&
