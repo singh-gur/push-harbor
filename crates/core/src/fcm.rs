@@ -21,6 +21,8 @@ const SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 const TOKEN_REFRESH_MARGIN_SECS: u64 = 300;
 /// `Retry-After` for FCM 429s that don't send one.
 const DEFAULT_RETRY_AFTER_SECS: u64 = 60;
+/// A challenge nobody answers within a minute is useless; the app asks for a resend instead.
+const CHALLENGE_TTL: &str = "60s";
 
 /// The fields of a Google service-account key file the relay needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +85,29 @@ impl<C: Crypto, H: HttpClient, T: TokenCache> Fcm<'_, C, H, T> {
         send: &ValidSend<'_>,
         now: u64,
     ) -> Result<(), Error> {
+        self.post(message(registration, body, send), now).await
+    }
+
+    /// Registration challenge (PH-18): high-priority data message `{c: nonce, r: rid}`, no payload.
+    /// The app answers it natively, only for a registration it started itself.
+    pub async fn send_challenge(
+        &self,
+        target: &str,
+        rid: &str,
+        nonce: &str,
+        now: u64,
+    ) -> Result<(), Error> {
+        let message = json!({
+            "message": {
+                "fid": target,
+                "data": { "c": nonce, "r": rid },
+                "android": { "priority": "HIGH", "ttl": CHALLENGE_TTL },
+            }
+        });
+        self.post(message, now).await
+    }
+
+    async fn post(&self, message: Value, now: u64) -> Result<(), Error> {
         let token = self.access_token(now).await?;
         let request = HttpRequest {
             url: format!(
@@ -93,7 +118,7 @@ impl<C: Crypto, H: HttpClient, T: TokenCache> Fcm<'_, C, H, T> {
                 ("Authorization".into(), format!("Bearer {token}")),
                 ("Content-Type".into(), "application/json".into()),
             ],
-            body: message(registration, body, send).to_string().into_bytes(),
+            body: message.to_string().into_bytes(),
         };
         let response = self
             .http

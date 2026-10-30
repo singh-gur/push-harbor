@@ -68,6 +68,24 @@ pub struct Registration {
     pub created_at: u64,
 }
 
+/// A registration waiting for its challenge answer (PH-18). It cannot receive pushes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingRegistration {
+    /// Registration ID the app confirms with; random like an endpoint ID, but never one.
+    pub rid: EndpointId,
+    pub platform: Platform,
+    pub target: String,
+    pub key_id: KeyId,
+    pub sender_key: PublicKey,
+    /// 128-bit random base64url; single use.
+    pub nonce: String,
+    pub expires_at: u64,
+    pub challenges_sent: u8,
+    /// Target rotation: on confirm, this existing endpoint gets the new target instead of a new
+    /// endpoint being minted.
+    pub replaces: Option<EndpointId>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

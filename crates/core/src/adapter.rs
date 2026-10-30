@@ -7,7 +7,7 @@
 #![allow(async_fn_in_trait)]
 
 use crate::error::Error;
-use crate::model::{EndpointId, Registration};
+use crate::model::{EndpointId, PendingRegistration, Registration};
 use crate::vapid::PublicKey;
 
 pub trait Clock {
@@ -48,6 +48,12 @@ pub trait Store {
     /// Insert or replace.
     async fn put(&self, registration: &Registration) -> Result<(), Error>;
     async fn delete(&self, id: &EndpointId) -> Result<(), Error>;
+
+    /// Insert or replace a pending registration (expired ones may be purged by the adapter).
+    async fn put_pending(&self, pending: &PendingRegistration) -> Result<(), Error>;
+    async fn get_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error>;
+    /// Atomically removes and returns it, so a challenge can be answered only once.
+    async fn take_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error>;
 
     /// Atomically claims `(id, key)` for one send. `None`: the caller now owns the claim (stored as
     /// `Pending` until `expires_at`). `Some(state)`: an unexpired earlier claim exists.

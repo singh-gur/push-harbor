@@ -21,3 +21,8 @@ pub const MAX_IDEMPOTENCY_KEY_LEN: usize = 64;
 
 /// Client-chosen key ID echoed to the device as `s` (PH-9, budgeted in PH-19).
 pub const MAX_KEY_ID_LEN: usize = 32;
+
+/// A pending registration (and its challenge) expires after this (PH-18).
+pub const PENDING_TTL_SECS: u64 = 300;
+/// Challenge pushes per pending registration, the first one included (PH-18).
+pub const MAX_CHALLENGE_SENDS: u8 = 3;

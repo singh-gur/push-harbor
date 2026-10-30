@@ -31,6 +31,10 @@ pub struct RateLimits {
     pub per_sender: RateLimit,
     /// Per endpoint (one device subscription).
     pub per_endpoint: RateLimit,
+    /// New registrations per client IP.
+    pub registrations_per_ip: RateLimit,
+    /// Challenge pushes per provider target, so a known FID can't be spammed with challenges.
+    pub challenges_per_target: RateLimit,
 }
 
 impl Default for RateLimits {
@@ -44,6 +48,14 @@ impl Default for RateLimits {
             per_ip: per_minute(600),
             per_sender: per_minute(600),
             per_endpoint: per_minute(60),
+            registrations_per_ip: RateLimit {
+                limit: 30,
+                window_secs: 3600,
+            },
+            challenges_per_target: RateLimit {
+                limit: 10,
+                window_secs: 3600,
+            },
         }
     }
 }
@@ -143,7 +155,12 @@ impl<S: Store, L: RateLimiter, C: Crypto, H: HttpClient, T: TokenCache> Relay<'_
         }
     }
 
-    async fn limit(&self, bucket: String, limit: RateLimit, now: u64) -> Result<(), Error> {
+    pub(crate) async fn limit(
+        &self,
+        bucket: String,
+        limit: RateLimit,
+        now: u64,
+    ) -> Result<(), Error> {
         self.limiter
             .acquire(&bucket, limit.limit, limit.window_secs, now)
             .await
@@ -153,182 +170,14 @@ impl<S: Store, L: RateLimiter, C: Crypto, H: HttpClient, T: TokenCache> Relay<'_
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::{AccessToken, HttpResponse};
-    use crate::fakes::{FakeCrypto, FakeHttp, MemoryRateLimiter, MemoryStore, MemoryTokenCache};
-    use crate::fcm::ServiceAccount;
-    use crate::model::KeyId;
-    use crate::vapid::PublicKey;
-    use p256::ecdsa::{Signature, SigningKey, signature::Signer};
+    use crate::testkit::*;
     use serde_json::Value;
-
-    const ORIGIN: &str = "https://relay.example";
-    const NOW: u64 = 1_800_000_000;
-
-    struct World {
-        account: ServiceAccount,
-        store: MemoryStore,
-        limiter: MemoryRateLimiter,
-        crypto: FakeCrypto,
-        http: FakeHttp,
-        cache: MemoryTokenCache,
-        limits: RateLimits,
-    }
-
-    impl World {
-        fn new(limits: RateLimits) -> Self {
-            let world = Self {
-                account: ServiceAccount {
-                    project_id: "demo".into(),
-                    client_email: "relay@demo".into(),
-                    token_uri: "https://oauth2.googleapis.com/token".into(),
-                    private_key_der: vec![0],
-                },
-                store: MemoryStore::default(),
-                limiter: MemoryRateLimiter::default(),
-                crypto: FakeCrypto::default(),
-                http: FakeHttp::default(),
-                cache: MemoryTokenCache::default(),
-                limits,
-            };
-            // Skip OAuth: a valid cached token.
-            *world.cache.0.borrow_mut() = Some(AccessToken {
-                token: "tok".into(),
-                expires_at: NOW + 3600,
-            });
-            world
-        }
-
-        fn relay(
-            &self,
-        ) -> Relay<'_, MemoryStore, MemoryRateLimiter, FakeCrypto, FakeHttp, MemoryTokenCache>
-        {
-            Relay {
-                origin: ORIGIN,
-                limits: &self.limits,
-                store: &self.store,
-                limiter: &self.limiter,
-                crypto: &self.crypto,
-                fcm: Fcm {
-                    account: &self.account,
-                    crypto: &self.crypto,
-                    http: &self.http,
-                    cache: &self.cache,
-                },
-            }
-        }
-
-        /// Registers a device bound to `sender` and returns its endpoint ID.
-        fn register(&self, seed: u8, sender: &SigningKey) -> String {
-            let id = EndpointId::from_random([seed; 16]);
-            let registration = Registration {
-                endpoint: id.clone(),
-                platform: Platform::Fcm,
-                target: format!("fid-{seed}"),
-                key_id: KeyId::parse("k1").unwrap(),
-                sender_key: public(sender),
-                created_at: NOW,
-            };
-            pollster::block_on(self.store.put(&registration)).unwrap();
-            id.as_str().to_owned()
-        }
-
-        fn fcm_replies(&self, statuses: &[u16]) {
-            for &status in statuses {
-                let body = match status {
-                    404 => r#"{"error":{"details":[{"errorCode":"UNREGISTERED"}]}}"#,
-                    _ => "{}",
-                };
-                self.http.responses.borrow_mut().push_back(Ok(HttpResponse {
-                    status,
-                    headers: vec![],
-                    body: body.as_bytes().to_vec(),
-                }));
-            }
-        }
-
-        fn fcm_calls(&self) -> usize {
-            self.http.requests.borrow().len()
-        }
-
-        fn send(
-            &self,
-            endpoint: &str,
-            auth: &str,
-            idempotency_key: Option<&str>,
-            ip: Option<&str>,
-        ) -> Result<(), Error> {
-            let body = aes128gcm_body(200);
-            let request = SendRequest {
-                endpoint,
-                authorization: Some(auth),
-                headers: Headers {
-                    content_encoding: Some("aes128gcm"),
-                    ttl: Some("60"),
-                    idempotency_key,
-                    ..Default::default()
-                },
-                body: &body,
-                client_ip: ip,
-            };
-            pollster::block_on(self.relay().send(&request, NOW))
-        }
-    }
-
-    fn signer(seed: u8) -> SigningKey {
-        SigningKey::from_slice(&[seed; 32]).unwrap()
-    }
-
-    fn public(k: &SigningKey) -> PublicKey {
-        k.verifying_key()
-            .to_sec1_point(false)
-            .as_bytes()
-            .try_into()
-            .unwrap()
-    }
-
-    fn vapid_header(k: &SigningKey) -> String {
-        let claims = format!(
-            r#"{{"aud":"{ORIGIN}","exp":{},"sub":"mailto:ops@example.com"}}"#,
-            NOW + 3600
-        );
-        let signed = format!(
-            "{}.{}",
-            URL_SAFE_NO_PAD.encode(r#"{"typ":"JWT","alg":"ES256"}"#),
-            URL_SAFE_NO_PAD.encode(claims)
-        );
-        let signature: Signature = k.sign(signed.as_bytes());
-        format!(
-            "vapid t={signed}.{}, k={}",
-            URL_SAFE_NO_PAD.encode(signature.to_bytes()),
-            URL_SAFE_NO_PAD.encode(public(k))
-        )
-    }
-
-    fn aes128gcm_body(len: usize) -> Vec<u8> {
-        let mut body = vec![0xAB; len];
-        body[16..20].copy_from_slice(&4096u32.to_be_bytes());
-        body[20] = 65;
-        body
-    }
-
-    fn generous() -> RateLimits {
-        let big = RateLimit {
-            limit: 1000,
-            window_secs: 60,
-        };
-        RateLimits {
-            global: big,
-            per_ip: big,
-            per_sender: big,
-            per_endpoint: big,
-        }
-    }
 
     #[test]
     fn delivers_through_fcm() {
         let w = World::new(generous());
         let sender = signer(7);
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         w.fcm_replies(&[200]);
         assert_eq!(
             w.send(&endpoint, &vapid_header(&sender), None, None),
@@ -346,7 +195,7 @@ mod tests {
     fn rejects_without_reaching_fcm() {
         let w = World::new(generous());
         let (sender, other) = (signer(7), signer(9));
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         let auth = vapid_header(&sender);
         assert_eq!(w.send("not-an-id", &auth, None, None), Err(Error::NotFound));
         assert_eq!(
@@ -384,7 +233,7 @@ mod tests {
     fn gone_device_deletes_the_endpoint() {
         let w = World::new(generous());
         let sender = signer(7);
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         w.fcm_replies(&[404]);
         assert_eq!(
             w.send(&endpoint, &vapid_header(&sender), None, None),
@@ -403,7 +252,7 @@ mod tests {
     fn idempotent_replay_never_delivers_twice() {
         let w = World::new(generous());
         let sender = signer(7);
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         let auth = vapid_header(&sender);
         w.fcm_replies(&[200, 200]);
         assert_eq!(w.send(&endpoint, &auth, Some("msg-1"), None), Ok(()));
@@ -417,7 +266,7 @@ mod tests {
     fn failed_send_releases_the_idempotency_key() {
         let w = World::new(generous());
         let sender = signer(7);
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         let auth = vapid_header(&sender);
         w.fcm_replies(&[503, 200]);
         assert_eq!(
@@ -432,7 +281,7 @@ mod tests {
     fn concurrent_duplicate_gets_retry_later() {
         let w = World::new(generous());
         let sender = signer(7);
-        let endpoint = w.register(1, &sender);
+        let endpoint = w.seed_registration(1, &sender);
         // Another request with the same key holds the claim and has not finished yet.
         let id = EndpointId::parse(&endpoint).unwrap();
         pollster::block_on(w.store.claim_idempotency(&id, "msg-1", NOW, NOW + 3600)).unwrap();
@@ -456,7 +305,7 @@ mod tests {
             per_endpoint: two,
             ..generous()
         });
-        let (ep1, ep2) = (w.register(1, &a), w.register(2, &a));
+        let (ep1, ep2) = (w.seed_registration(1, &a), w.seed_registration(2, &a));
         w.fcm_replies(&[200, 200, 200]);
         assert!(w.send(&ep1, &vapid_header(&a), None, None).is_ok());
         assert!(w.send(&ep1, &vapid_header(&a), None, None).is_ok());
@@ -471,7 +320,11 @@ mod tests {
             per_sender: two,
             ..generous()
         });
-        let (ep1, ep2, ep3) = (w.register(1, &a), w.register(2, &a), w.register(3, &b));
+        let (ep1, ep2, ep3) = (
+            w.seed_registration(1, &a),
+            w.seed_registration(2, &a),
+            w.seed_registration(3, &b),
+        );
         w.fcm_replies(&[200, 200, 200]);
         assert!(w.send(&ep1, &vapid_header(&a), None, None).is_ok());
         assert!(w.send(&ep2, &vapid_header(&a), None, None).is_ok());

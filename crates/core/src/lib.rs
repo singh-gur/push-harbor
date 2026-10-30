@@ -10,8 +10,11 @@ pub mod fakes;
 pub mod fcm;
 pub mod limits;
 pub mod model;
+pub mod registration;
 pub mod relay;
 pub mod send;
+#[cfg(test)]
+mod testkit;
 pub mod vapid;
 
 pub use error::Error;

@@ -9,7 +9,7 @@ use crate::adapter::{
     RateLimiter, Store, TokenCache,
 };
 use crate::error::Error;
-use crate::model::{EndpointId, Registration};
+use crate::model::{EndpointId, PendingRegistration, Registration};
 use crate::vapid::PublicKey;
 
 /// Clock that only moves when told to.
@@ -67,6 +67,7 @@ impl TokenCache for MemoryTokenCache {
 #[derive(Default)]
 pub struct MemoryStore {
     registrations: RefCell<HashMap<EndpointId, Registration>>,
+    pending: RefCell<HashMap<EndpointId, PendingRegistration>>,
     idempotency: RefCell<HashMap<(EndpointId, String), (IdempotencyState, u64)>>,
 }
 
@@ -85,6 +86,21 @@ impl Store for MemoryStore {
     async fn delete(&self, id: &EndpointId) -> Result<(), Error> {
         self.registrations.borrow_mut().remove(id);
         Ok(())
+    }
+
+    async fn put_pending(&self, pending: &PendingRegistration) -> Result<(), Error> {
+        self.pending
+            .borrow_mut()
+            .insert(pending.rid.clone(), pending.clone());
+        Ok(())
+    }
+
+    async fn get_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error> {
+        Ok(self.pending.borrow().get(rid).cloned())
+    }
+
+    async fn take_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error> {
+        Ok(self.pending.borrow_mut().remove(rid))
     }
 
     async fn claim_idempotency(
