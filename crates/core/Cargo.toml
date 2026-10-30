@@ -10,3 +10,10 @@ base64 = { version = "0.23.1", default-features = false, features = ["alloc"] }
 p256 = { version = "0.14.0", default-features = false, features = ["ecdsa"] }
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0.154", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+pollster = "1.0.1"
+
+[features]
+# In-memory adapter implementations for tests (core and adapters).
+fakes = []

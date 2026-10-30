@@ -1,0 +1,79 @@
+//! Ports each hosting option implements (Workers: DO/fetch/WebCrypto; native: SQLite/Postgres/reqwest).
+//!
+//! The traits use `async fn` without a `Send` bound on purpose: Workers futures wrap JS promises
+//! and are `!Send`.
+// shortcut: the native adapter (PH-15) still has to decide how to get `Send` futures for axum
+// (e.g. `trait-variant` or a current-thread runtime per request) once it implements these.
+#![allow(async_fn_in_trait)]
+
+use crate::error::Error;
+use crate::model::{EndpointId, Registration};
+use crate::vapid::PublicKey;
+
+pub trait Clock {
+    /// Unix seconds.
+    fn now(&self) -> u64;
+}
+
+pub trait Crypto {
+    /// Cryptographically secure random bytes (endpoint IDs, challenge nonces).
+    fn random_bytes(&self, out: &mut [u8]);
+
+    /// ES256 (P-256 / SHA-256) verification of a raw `r || s` signature. Workers should use
+    /// WebCrypto here (PH-21: wasm verify costs more CPU); native can use `p256`.
+    async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool;
+}
+
+pub trait Store {
+    async fn get(&self, id: &EndpointId) -> Result<Option<Registration>, Error>;
+    /// Insert or replace.
+    async fn put(&self, registration: &Registration) -> Result<(), Error>;
+    async fn delete(&self, id: &EndpointId) -> Result<(), Error>;
+
+    /// Status recorded for `(id, key)` that has not expired at `now`.
+    async fn idempotent_status(
+        &self,
+        id: &EndpointId,
+        key: &str,
+        now: u64,
+    ) -> Result<Option<u16>, Error>;
+    async fn record_idempotent(
+        &self,
+        id: &EndpointId,
+        key: &str,
+        status: u16,
+        expires_at: u64,
+    ) -> Result<(), Error>;
+}
+
+pub trait RateLimiter {
+    /// Takes one unit from `bucket` (fixed window of `window_secs` starting at the first hit).
+    /// `Err(Error::RateLimited { retry_after })` when the window is exhausted.
+    async fn acquire(
+        &self,
+        bucket: &str,
+        limit: u32,
+        window_secs: u64,
+        now: u64,
+    ) -> Result<(), Error>;
+}
+
+/// Outbound HTTP to push providers (always POST).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpRequest {
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+pub trait HttpClient {
+    /// `Err` only for transport failures (timeout, DNS, TLS); HTTP error statuses are `Ok`.
+    async fn post(&self, request: HttpRequest) -> Result<HttpResponse, Error>;
+}
