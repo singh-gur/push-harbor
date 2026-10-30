@@ -2,8 +2,8 @@
 //!
 //! The traits use `async fn` without a `Send` bound on purpose: Workers futures wrap JS promises
 //! and are `!Send`.
-// shortcut: the native adapter (PH-15) still has to decide how to get `Send` futures for axum
-// (e.g. `trait-variant` or a current-thread runtime per request) once it implements these.
+// Native (axum) still gets `Send` futures: with concrete, thread-safe adapter types the compiler
+// infers `Send` for the core futures (PH-15), so no `Send` bound is needed here.
 #![allow(async_fn_in_trait)]
 
 use crate::error::Error;
