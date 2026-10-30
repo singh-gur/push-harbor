@@ -4,7 +4,10 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 
-use crate::adapter::{Clock, Crypto, HttpClient, HttpRequest, HttpResponse, RateLimiter, Store};
+use crate::adapter::{
+    AccessToken, Clock, Crypto, HttpClient, HttpRequest, HttpResponse, RateLimiter, Store,
+    TokenCache,
+};
 use crate::error::Error;
 use crate::model::{EndpointId, Registration};
 use crate::vapid::PublicKey;
@@ -34,6 +37,30 @@ impl Crypto for FakeCrypto {
 
     async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool {
         crate::vapid::verify_es256_p256(key, message, signature)
+    }
+
+    /// Not RSA: a recognisable stand-in, since core has no RSA implementation.
+    async fn sign_rs256(&self, _pkcs8_der: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
+        Ok([b"rs256:".as_slice(), message].concat())
+    }
+}
+
+#[derive(Default)]
+pub struct MemoryTokenCache(pub RefCell<Option<AccessToken>>);
+
+impl TokenCache for MemoryTokenCache {
+    async fn get(&self) -> Result<Option<AccessToken>, Error> {
+        Ok(self.0.borrow().clone())
+    }
+
+    async fn put(&self, token: &AccessToken) -> Result<(), Error> {
+        *self.0.borrow_mut() = Some(token.clone());
+        Ok(())
+    }
+
+    async fn clear(&self) -> Result<(), Error> {
+        *self.0.borrow_mut() = None;
+        Ok(())
     }
 }
 

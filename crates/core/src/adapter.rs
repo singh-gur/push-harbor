@@ -22,6 +22,25 @@ pub trait Crypto {
     /// ES256 (P-256 / SHA-256) verification of a raw `r || s` signature. Workers should use
     /// WebCrypto here (PH-21: wasm verify costs more CPU); native can use `p256`.
     async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool;
+
+    /// RSASSA-PKCS1-v1_5 / SHA-256 with a PKCS#8 DER key (Google service-account OAuth).
+    /// Workers: WebCrypto (PH-21); native: an RSA crate.
+    async fn sign_rs256(&self, pkcs8_der: &[u8], message: &[u8]) -> Result<Vec<u8>, Error>;
+}
+
+/// Provider OAuth token (e.g. FCM), shared by every request of a deployment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccessToken {
+    pub token: String,
+    /// Unix seconds.
+    pub expires_at: u64,
+}
+
+/// Where the provider token lives: a Durable Object on Workers, process memory on native.
+pub trait TokenCache {
+    async fn get(&self) -> Result<Option<AccessToken>, Error>;
+    async fn put(&self, token: &AccessToken) -> Result<(), Error>;
+    async fn clear(&self) -> Result<(), Error>;
 }
 
 pub trait Store {

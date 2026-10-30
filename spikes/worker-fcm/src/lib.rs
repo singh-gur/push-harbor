@@ -32,6 +32,10 @@ impl pushharbor_core::adapter::Crypto for P256 {
     ) -> bool {
         pushharbor_core::vapid::verify_es256_p256(key, message, signature)
     }
+
+    async fn sign_rs256(&self, _: &[u8], _: &[u8]) -> Result<Vec<u8>, pushharbor_core::Error> {
+        unreachable!("not used here")
+    }
 }
 /// Refresh the OAuth token this long before it expires.
 const TOKEN_REFRESH_MARGIN: u64 = 300;

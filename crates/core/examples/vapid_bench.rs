@@ -16,6 +16,10 @@ impl Crypto for P256 {
     async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool {
         verify_es256_p256(key, message, signature)
     }
+
+    async fn sign_rs256(&self, _: &[u8], _: &[u8]) -> Result<Vec<u8>, pushharbor_core::Error> {
+        unreachable!("not used here")
+    }
 }
 
 fn main() {
