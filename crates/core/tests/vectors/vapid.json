@@ -7,7 +7,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
       "audience": "https://relay.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "ok"
     },
     {
@@ -15,7 +14,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.2eKNC2cg4H1cKOcgN6ng1gN1-YVNSRXZe7kcHNzpgkV9zywlD_CmwH6ig0SkR1G_etjpSNGwCIlAyC34rFzlVg, k=BHl3jVHdi8feKkAEyecsvwP8pd081qJo6fihX4dC99wMl78M9b9-Z1RR4RRM-67FmH3qaY1zmFopZYReOl5j5Fw",
       "audience": "https://relay.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "ok"
     },
     {
@@ -23,7 +21,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
       "audience": "https://other.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "WrongAudience"
     },
     {
@@ -31,15 +28,13 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
       "audience": "https://relay.example",
       "now": 1793338577,
-      "max_lifetime": 86400,
       "expect": "Expired"
     },
     {
       "name": "lifetime too long",
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
       "audience": "https://relay.example",
-      "now": 1793252176,
-      "max_lifetime": 86400,
+      "now": 1793251876,
       "expect": "LifetimeTooLong"
     },
     {
@@ -47,7 +42,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERFAwF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
       "audience": "https://relay.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "BadSignature"
     },
     {
@@ -55,7 +49,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BHl3jVHdi8feKkAEyecsvwP8pd081qJo6fihX4dC99wMl78M9b9-Z1RR4RRM-67FmH3qaY1zmFopZYReOl5j5Fw",
       "audience": "https://relay.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "BadSignature"
     },
     {
@@ -63,7 +56,6 @@
       "authorization": "WebPush eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.ucAJW43t8169srFnL0s_kbX4uiJNsQSWj-UjxmbICVzKxY4w4mTH1uZVeuzhoCCfHB9HWYZUXY20NGfjIXUkuA",
       "audience": "https://relay.example",
       "now": 1793334977,
-      "max_lifetime": 86400,
       "expect": "NotVapid"
     },
     {
@@ -72,7 +64,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovLzEyNy4wLjAuMTo4ODk4IiwiZXhwIjoxNzkzNDE4NjEyLCJzdWIiOiJtYWlsdG86c3VydmV5QGV4YW1wbGUuY29tIn0.W0rZqTft5c26sqkQfRlDID6I7CI_srIqSuVB-r7LDRokXCsoiVTPdEgudVXk6A6R_FcjbLh4NoC2120aRxo2xQ, k=BGK-UHH41sJ68VXtoj9DO3y_VeiOznsTaSLiBoxmA9mPx0HFKLrn0QekQTFsIN0b7-ZqNO5xdHeiwv2y4gXBJMM",
       "audience": "https://127.0.0.1:8898",
       "now": 1793375412,
-      "max_lifetime": 86400,
       "expect": "ok",
       "sub": "mailto:survey@example.com"
     },
@@ -82,7 +73,6 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xOjg4OTkiLCJleHAiOjE3OTM0MTg2MTIsInN1YiI6Im1haWx0bzpzdXJ2ZXlAZXhhbXBsZS5jb20ifQ.DYQxsNnZ4GhSo27GWm8o_qMRr9PnV3j-hT8iflsMf5jsda5HuM88Ok4_0Wl0LvYlLrMgGgXGQqS9vIGbw2UgcQ,k=BNBI4-IO7VKu_RPGZQqRq0yw_3faAZYX6jgAlKASBE1-vpmAe8h3KKkY88hm1SE_IvT5bcKibm8w2izLRVHjk4o",
       "audience": "http://127.0.0.1:8899",
       "now": 1793375412,
-      "max_lifetime": 86400,
       "expect": "ok",
       "sub": "mailto:survey@example.com"
     },
@@ -92,7 +82,6 @@
       "authorization": "vapid t=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xOjg4OTkiLCJleHAiOjE3OTM0MTg2MTIsInN1YiI6Im1haWx0bzpzdXJ2ZXlAZXhhbXBsZS5jb20ifQ.VuYR3iGLAQTA685EbUtXQk14cSgtYNXgIQwej0KgRJX1LPflhNZDGY7xN0nic2pnomWgzjKad6rPFUYrxzcWUg, k=BA488zulUJv3AovLRseOT4gBdRWRdMSXjQ8X8Tp4tKxSC9vZ_V4CpARjsu6z2JneKus-r3CQcS_Mk1rO1ipVnz8",
       "audience": "http://127.0.0.1:8899",
       "now": 1793375412,
-      "max_lifetime": 86400,
       "expect": "ok",
       "sub": "mailto:survey@example.com"
     },
@@ -102,9 +91,9 @@
       "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwOi8vMTI3LjAuMC4xIiwiZXhwIjoxNzkzNDE4NjEzLCJzdWIiOiJtYWlsdG86c3VydmV5QGV4YW1wbGUuY29tIn0.h2j8R9GKFY0V2Xw5JgLDQOXfWSbeLsi2dn2HMlD1U6x9-3Cj7FAQQZwzqpqZiCa7IRYC30vN9hKjGDLoCQenlg, k=BNcvrrkAkzdvg4kTwEb00AG6HliR-FyKDiO8gzVr6_TOk9Q85mlny3I2DwSeDPT5vlFiwIMNsQ2-m3Ou7gcGK3Y",
       "audience": "http://127.0.0.1",
       "now": 1793375413,
-      "max_lifetime": 86400,
       "expect": "ok",
       "sub": "mailto:survey@example.com"
     }
-  ]
+  ],
+  "max_lifetime_secs": 86700
 }

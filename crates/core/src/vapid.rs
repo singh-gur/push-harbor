@@ -9,13 +9,17 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
 use serde::Deserialize;
 
+use crate::adapter::Crypto;
+use crate::error::Error;
+use crate::limits::VAPID_MAX_LIFETIME_SECS;
+
 /// Uncompressed SEC1 P-256 public key, as sent in `k=`.
 pub type PublicKey = [u8; 65];
 
 /// A successfully verified VAPID token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Vapid {
-    /// Sender identity; compare with the key bound to the endpoint.
+    /// Sender identity: the key bound to the endpoint, and the per-sender rate-limit key.
     pub public_key: PublicKey,
     pub sub: String,
     pub exp: u64,
@@ -49,25 +53,24 @@ struct Claims {
     sub: Option<String>,
 }
 
-/// Verify a VAPID `Authorization` header value.
-///
-/// `audience` is the relay origin (`https://host[:port]`, no trailing slash). `now` is unix
-/// seconds. `max_lifetime` is the longest accepted `exp - now`; callers add any clock-skew
-/// allowance to it.
-pub fn verify(
-    authorization: &str,
-    audience: &str,
-    now: u64,
-    max_lifetime: u64,
-) -> Result<Vapid, VapidError> {
+/// A structurally valid ES256 token whose signature has not been checked yet.
+#[derive(Debug)]
+pub struct Token<'a> {
+    pub public_key: PublicKey,
+    signed: &'a str,
+    claims: &'a str,
+    signature: [u8; 64],
+}
+
+/// Parses `Authorization: vapid t=<jwt>, k=<key>` without any signature work.
+pub fn parse(authorization: &str) -> Result<Token<'_>, VapidError> {
     use VapidError::*;
 
     let (token, key) = parse_header(authorization)?;
     let public_key: PublicKey = b64(key)
         .and_then(|bytes| bytes.try_into().ok())
+        .filter(|key: &PublicKey| key[0] == 4)
         .ok_or(InvalidKey)?;
-    let verifying_key = VerifyingKey::from_sec1_bytes(&public_key).map_err(|_| InvalidKey)?;
-
     let (signed, signature) = token.rsplit_once('.').ok_or(MalformedToken)?;
     let (header, claims) = signed.split_once('.').ok_or(MalformedToken)?;
     let header: JwtHeader = json(header)?;
@@ -75,21 +78,67 @@ pub fn verify(
         return Err(UnsupportedAlgorithm);
     }
     let signature = b64(signature)
-        .and_then(|bytes| Signature::from_slice(&bytes).ok())
+        .and_then(|bytes| bytes.try_into().ok())
         .ok_or(MalformedToken)?;
-    verifying_key
-        .verify(signed.as_bytes(), &signature)
-        .map_err(|_| BadSignature)?;
+    Ok(Token {
+        public_key,
+        signed,
+        claims,
+        signature,
+    })
+}
 
+/// Verifies a VAPID header for `audience` (the relay origin, `https://host[:port]`) at unix time
+/// `now`, using the adapter's ES256 implementation. Accepts `exp` up to
+/// [`VAPID_MAX_LIFETIME_SECS`] ahead.
+pub async fn verify(
+    authorization: &str,
+    audience: &str,
+    now: u64,
+    crypto: &impl Crypto,
+) -> Result<Vapid, VapidError> {
+    check(parse(authorization)?, audience, now, crypto).await
+}
+
+/// [`verify`] plus endpoint binding: only the key bound at registration may send (RFC 8292
+/// section 4.2). A different key gets 403 before any signature work; invalid tokens get 401.
+pub async fn authorize(
+    authorization: &str,
+    audience: &str,
+    now: u64,
+    bound: &PublicKey,
+    crypto: &impl Crypto,
+) -> Result<Vapid, Error> {
+    let token = parse(authorization)?;
+    if token.public_key != *bound {
+        return Err(Error::Forbidden);
+    }
+    Ok(check(token, audience, now, crypto).await?)
+}
+
+async fn check(
+    token: Token<'_>,
+    audience: &str,
+    now: u64,
+    crypto: &impl Crypto,
+) -> Result<Vapid, VapidError> {
+    use VapidError::*;
+
+    if !crypto
+        .verify_es256(&token.public_key, token.signed.as_bytes(), &token.signature)
+        .await
+    {
+        return Err(BadSignature);
+    }
     // Claims are only trusted after the signature check.
-    let claims: Claims = json(claims)?;
+    let claims: Claims = json(token.claims)?;
     if claims.aud != audience {
         return Err(WrongAudience);
     }
     if claims.exp <= now {
         return Err(Expired);
     }
-    if claims.exp - now > max_lifetime {
+    if claims.exp - now > VAPID_MAX_LIFETIME_SECS {
         return Err(LifetimeTooLong);
     }
     let sub = claims
@@ -97,10 +146,22 @@ pub fn verify(
         .filter(|sub| !sub.is_empty())
         .ok_or(MissingSubject)?;
     Ok(Vapid {
-        public_key,
+        public_key: token.public_key,
         sub,
         exp: claims.exp,
     })
+}
+
+/// Pure-Rust ES256 verification for native adapters and tests. Workers should use WebCrypto
+/// instead (PH-21: cheaper CPU). Accepts high-S signatures (P-256 does not normalize S).
+pub fn verify_es256_p256(key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool {
+    let (Ok(key), Ok(signature)) = (
+        VerifyingKey::from_sec1_bytes(key),
+        Signature::from_slice(signature),
+    ) else {
+        return false;
+    };
+    key.verify(message, &signature).is_ok()
 }
 
 /// Returns `(t, k)`. Auth params are comma-separated, names case-insensitive, values may be quoted.
@@ -136,11 +197,11 @@ fn json<T: for<'de> Deserialize<'de>>(segment: &str) -> Result<T, VapidError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fakes::FakeCrypto;
     use p256::ecdsa::{SigningKey, signature::Signer};
 
     const AUD: &str = "https://relay.example";
     const NOW: u64 = 1_800_000_000;
-    const DAY: u64 = 86_400;
 
     fn key(seed: u8) -> SigningKey {
         SigningKey::from_slice(&[seed; 32]).unwrap()
@@ -169,15 +230,23 @@ mod tests {
         format!(r#"{{"aud":"{aud}","exp":{exp},"sub":"mailto:ops@example.com"}}"#)
     }
 
-    fn check(auth: &str) -> Result<Vapid, VapidError> {
-        verify(auth, AUD, NOW, DAY)
+    fn run(auth: &str) -> Result<Vapid, VapidError> {
+        pollster::block_on(verify(auth, AUD, NOW, &FakeCrypto::default()))
+    }
+
+    fn public(k: &SigningKey) -> PublicKey {
+        k.verifying_key()
+            .to_sec1_point(false)
+            .as_bytes()
+            .try_into()
+            .unwrap()
     }
 
     #[test]
     fn accepts_valid_token() {
         let k = key(7);
         let (signed, sig) = token(&k, "ES256", &claims(AUD, NOW + 3600));
-        let vapid = check(&header(&signed, &sig, &k)).unwrap();
+        let vapid = run(&header(&signed, &sig, &k)).unwrap();
         assert_eq!(vapid.sub, "mailto:ops@example.com");
         assert_eq!(vapid.exp, NOW + 3600);
         assert_eq!(
@@ -193,8 +262,8 @@ mod tests {
         let (signed, sig) = token(&k, "ES256", &claims(AUD, NOW + 3600));
         let (r, s) = sig.split_scalars();
         let flipped = Signature::from_scalars(r.to_bytes(), (-s).to_bytes()).unwrap();
-        assert!(check(&header(&signed, &sig, &k)).is_ok());
-        assert!(check(&header(&signed, &flipped, &k)).is_ok());
+        assert!(run(&header(&signed, &sig, &k)).is_ok());
+        assert!(run(&header(&signed, &flipped, &k)).is_ok());
     }
 
     #[test]
@@ -209,7 +278,7 @@ mod tests {
             format!(r#"vapid t="{}", k="{}=""#, &t[2..], &kk[2..]),
         ];
         for v in variants {
-            assert!(check(&v).is_ok(), "{v}");
+            assert!(run(&v).is_ok(), "{v}");
         }
     }
 
@@ -233,6 +302,15 @@ mod tests {
             (format!("WebPush {signed}"), VapidError::NotVapid),
             ("vapid t=abc".into(), VapidError::MalformedHeader),
             (format!("vapid t={signed}, k=AAAA"), VapidError::InvalidKey),
+            // Right length and prefix but not a curve point: the crypto adapter rejects it.
+            (
+                format!(
+                    "vapid t={signed}.{}, k={}",
+                    URL_SAFE_NO_PAD.encode(sig.to_bytes()),
+                    URL_SAFE_NO_PAD.encode([4u8; 65])
+                ),
+                VapidError::BadSignature,
+            ),
             (header(&signed, &sig, &other), VapidError::BadSignature),
             (tampered, VapidError::BadSignature),
             (
@@ -245,7 +323,7 @@ mod tests {
             ),
             (good(&claims(AUD, NOW)), VapidError::Expired),
             (
-                good(&claims(AUD, NOW + DAY + 1)),
+                good(&claims(AUD, NOW + VAPID_MAX_LIFETIME_SECS + 1)),
                 VapidError::LifetimeTooLong,
             ),
             (
@@ -254,7 +332,36 @@ mod tests {
             ),
         ];
         for (auth, want) in cases {
-            assert_eq!(check(&auth), Err(want), "{auth}");
+            assert_eq!(run(&auth), Err(want), "{auth}");
         }
+        assert!(run(&good(&claims(AUD, NOW + VAPID_MAX_LIFETIME_SECS))).is_ok());
+    }
+
+    #[test]
+    fn authorize_enforces_the_bound_key() {
+        let (k, other) = (key(7), key(9));
+        let (signed, sig) = token(&k, "ES256", &claims(AUD, NOW + 3600));
+        let auth = header(&signed, &sig, &k);
+        let crypto = FakeCrypto::default();
+        let authorize = |auth: &str, bound: &PublicKey| {
+            pollster::block_on(authorize(auth, AUD, NOW, bound, &crypto))
+        };
+
+        assert_eq!(
+            authorize(&auth, &public(&k)).unwrap().public_key,
+            public(&k)
+        );
+        // A valid token from another sender is forbidden, not unauthorized.
+        assert_eq!(authorize(&auth, &public(&other)), Err(Error::Forbidden));
+        // The bound key with a forged signature is still a 401.
+        let (_, other_sig) = token(&other, "ES256", &claims(AUD, NOW + 3600));
+        assert_eq!(
+            authorize(&header(&signed, &other_sig, &k), &public(&k)),
+            Err(Error::Unauthorized(VapidError::BadSignature))
+        );
+        assert_eq!(
+            authorize("", &public(&k)),
+            Err(Error::Unauthorized(VapidError::NotVapid))
+        );
     }
 }

@@ -4,8 +4,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 
-use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
-
 use crate::adapter::{Clock, Crypto, HttpClient, HttpRequest, HttpResponse, RateLimiter, Store};
 use crate::error::Error;
 use crate::model::{EndpointId, Registration};
@@ -35,13 +33,7 @@ impl Crypto for FakeCrypto {
     }
 
     async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool {
-        let (Ok(key), Ok(sig)) = (
-            VerifyingKey::from_sec1_bytes(key),
-            Signature::from_slice(signature),
-        ) else {
-            return false;
-        };
-        key.verify(message, &sig).is_ok()
+        crate::vapid::verify_es256_p256(key, message, signature)
     }
 }
 
@@ -146,7 +138,7 @@ impl HttpClient for FakeHttp {
 mod tests {
     use super::*;
     use crate::model::{KeyId, Platform};
-    use p256::ecdsa::{SigningKey, signature::Signer};
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 
     fn registration(id: &EndpointId) -> Registration {
         Registration {

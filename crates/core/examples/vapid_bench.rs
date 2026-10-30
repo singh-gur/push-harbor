@@ -4,6 +4,20 @@
 
 use std::time::Instant;
 
+use pushharbor_core::adapter::Crypto;
+use pushharbor_core::vapid::{PublicKey, verify, verify_es256_p256};
+
+/// The pure-Rust verifier a native adapter would use.
+struct P256;
+
+impl Crypto for P256 {
+    fn random_bytes(&self, _: &mut [u8]) {}
+
+    async fn verify_es256(&self, key: &PublicKey, message: &[u8], signature: &[u8; 64]) -> bool {
+        verify_es256_p256(key, message, signature)
+    }
+}
+
 fn main() {
     let file: serde_json::Value =
         serde_json::from_str(include_str!("../tests/vectors/vapid.json")).unwrap();
@@ -17,7 +31,7 @@ fn main() {
     let run = |n: u32| {
         let start = Instant::now();
         for _ in 0..n {
-            pushharbor_core::vapid::verify(auth, aud, now, 86_400).unwrap();
+            pollster::block_on(verify(auth, aud, now, &P256)).unwrap();
         }
         start.elapsed() / n
     };

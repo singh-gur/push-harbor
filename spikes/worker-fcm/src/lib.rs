@@ -18,8 +18,21 @@ use worker::wasm_bindgen::JsCast;
 use worker::wasm_bindgen_futures::JsFuture;
 use worker::*;
 
-/// RFC 8292 caps `exp` at 24 h; 5 min of clock-skew allowance (decision pending in PH-9).
-const VAPID_MAX_LIFETIME: u64 = 24 * 3600 + 300;
+/// Spike-era verifier: core's pure-Rust ES256 (PH-17 should use WebCrypto instead, see PH-21).
+struct P256;
+
+impl pushharbor_core::adapter::Crypto for P256 {
+    fn random_bytes(&self, _: &mut [u8]) {}
+
+    async fn verify_es256(
+        &self,
+        key: &pushharbor_core::vapid::PublicKey,
+        message: &[u8],
+        signature: &[u8; 64],
+    ) -> bool {
+        pushharbor_core::vapid::verify_es256_p256(key, message, signature)
+    }
+}
 /// Refresh the OAuth token this long before it expires.
 const TOKEN_REFRESH_MARGIN: u64 = 300;
 
@@ -59,7 +72,7 @@ async fn send(mut req: Request, env: Env) -> Result<Response> {
     let origin = env.var("RELAY_ORIGIN")?.to_string();
     let auth = req.headers().get("Authorization")?.unwrap_or_default();
     let now = Date::now().as_millis() / 1000;
-    if let Err(e) = pushharbor_core::vapid::verify(&auth, &origin, now, VAPID_MAX_LIFETIME) {
+    if let Err(e) = pushharbor_core::vapid::verify(&auth, &origin, now, &P256).await {
         return Response::error(format!("vapid: {e:?}"), 401);
     }
     let body = req.bytes().await?;
