@@ -122,6 +122,8 @@ async fn token(State(fake): State<Arc<FakeFcm>>, body: String) -> Response {
 }
 
 /// Behaviour by FID prefix: `gone-` UNREGISTERED, `throttle-` 429, `down-` 503, `slow-` stalls.
+/// Challenges (no `p`) succeed for every prefix except `dead-` and `slow-`, so tests can register
+/// a device that fails later; `dead-` is a device FCM never knew.
 async fn messages_send(
     State(fake): State<Arc<FakeFcm>>,
     headers: HeaderMap,
@@ -144,7 +146,12 @@ async fn messages_send(
         .entry(target.clone())
         .or_default()
         .push(message.clone());
+    let is_challenge = message["data"].get("p").is_none();
     match target.split('-').next().unwrap_or_default() {
+        "dead" => fcm_error(StatusCode::NOT_FOUND, "UNREGISTERED"),
+        "gone" | "throttle" | "down" if is_challenge => {
+            Json(json!({"name": "projects/conformance/messages/challenge"})).into_response()
+        }
         "gone" => fcm_error(StatusCode::NOT_FOUND, "UNREGISTERED"),
         "throttle" => {
             let mut response = fcm_error(StatusCode::TOO_MANY_REQUESTS, "QUOTA_EXCEEDED");
@@ -172,7 +179,12 @@ fn fcm_error(status: StatusCode, code: &str) -> Response {
 /// File listing values that must never appear in relay logs (one per line); checked by the
 /// `logs` test after the suite ran. Path from `CONFORMANCE_SECRETS`.
 pub fn secrets_file() -> String {
-    std::env::var("CONFORMANCE_SECRETS").unwrap_or_else(|_| "target/conformance-secrets.txt".into())
+    std::env::var("CONFORMANCE_SECRETS").unwrap_or_else(|_| {
+        std::env::temp_dir()
+            .join("pushharbor-conformance-secrets.txt")
+            .display()
+            .to_string()
+    })
 }
 
 pub fn record_secret(value: &str) {
@@ -361,12 +373,12 @@ impl Relay {
         body: &[u8],
         headers: &[(&str, &str)],
     ) -> reqwest::Response {
-        let mut request = self
-            .http
-            .post(endpoint)
-            .header("Content-Encoding", "aes128gcm")
-            .header("TTL", "60")
-            .body(body.to_vec());
+        let mut request = self.http.post(endpoint).body(body.to_vec());
+        for (name, default) in [("Content-Encoding", "aes128gcm"), ("TTL", "60")] {
+            if !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) {
+                request = request.header(name, default);
+            }
+        }
         record_secret(&URL_SAFE_NO_PAD.encode(body));
         if let Some(auth) = authorization {
             if let Some(t) = auth

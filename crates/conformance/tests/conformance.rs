@@ -304,6 +304,9 @@ async fn provider_error_mapping() {
 
     let down = r.subscribe(&sender, &fid("down")).await;
     assert_eq!(r.push_as(&down, &sender).await.status(), 503);
+
+    // A target FCM never knew can't even be registered.
+    assert_eq!(r.register(&sender, &fid("dead"), None).await.status(), 400);
 }
 
 #[tokio::test]
