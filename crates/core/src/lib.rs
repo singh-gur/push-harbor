@@ -10,6 +10,7 @@ pub mod fakes;
 pub mod fcm;
 pub mod limits;
 pub mod model;
+pub mod relay;
 pub mod send;
 pub mod vapid;
 

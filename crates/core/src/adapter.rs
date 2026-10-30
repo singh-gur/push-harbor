@@ -49,20 +49,33 @@ pub trait Store {
     async fn put(&self, registration: &Registration) -> Result<(), Error>;
     async fn delete(&self, id: &EndpointId) -> Result<(), Error>;
 
-    /// Status recorded for `(id, key)` that has not expired at `now`.
-    async fn idempotent_status(
+    /// Atomically claims `(id, key)` for one send. `None`: the caller now owns the claim (stored as
+    /// `Pending` until `expires_at`). `Some(state)`: an unexpired earlier claim exists.
+    /// Must be atomic across instances, e.g. `INSERT ... ON CONFLICT DO NOTHING` or a Durable Object.
+    async fn claim_idempotency(
         &self,
         id: &EndpointId,
         key: &str,
         now: u64,
-    ) -> Result<Option<u16>, Error>;
-    async fn record_idempotent(
+        expires_at: u64,
+    ) -> Result<Option<IdempotencyState>, Error>;
+
+    /// `delivered = true` keeps the claim as the replay answer; `false` releases it so a retry can
+    /// go through (the send failed).
+    async fn finish_idempotency(
         &self,
         id: &EndpointId,
         key: &str,
-        status: u16,
-        expires_at: u64,
+        delivered: bool,
     ) -> Result<(), Error>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdempotencyState {
+    /// Another request with the same key is being delivered right now.
+    Pending,
+    /// Already delivered: replay success without sending again.
+    Delivered,
 }
 
 pub trait RateLimiter {

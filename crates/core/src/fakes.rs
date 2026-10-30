@@ -5,8 +5,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 
 use crate::adapter::{
-    AccessToken, Clock, Crypto, HttpClient, HttpRequest, HttpResponse, RateLimiter, Store,
-    TokenCache,
+    AccessToken, Clock, Crypto, HttpClient, HttpRequest, HttpResponse, IdempotencyState,
+    RateLimiter, Store, TokenCache,
 };
 use crate::error::Error;
 use crate::model::{EndpointId, Registration};
@@ -67,7 +67,7 @@ impl TokenCache for MemoryTokenCache {
 #[derive(Default)]
 pub struct MemoryStore {
     registrations: RefCell<HashMap<EndpointId, Registration>>,
-    idempotency: RefCell<HashMap<(EndpointId, String), (u16, u64)>>,
+    idempotency: RefCell<HashMap<(EndpointId, String), (IdempotencyState, u64)>>,
 }
 
 impl Store for MemoryStore {
@@ -87,30 +87,39 @@ impl Store for MemoryStore {
         Ok(())
     }
 
-    async fn idempotent_status(
+    async fn claim_idempotency(
         &self,
         id: &EndpointId,
         key: &str,
         now: u64,
-    ) -> Result<Option<u16>, Error> {
-        Ok(self
-            .idempotency
-            .borrow()
-            .get(&(id.clone(), key.to_owned()))
-            .filter(|(_, expires_at)| *expires_at > now)
-            .map(|(status, _)| *status))
+        expires_at: u64,
+    ) -> Result<Option<IdempotencyState>, Error> {
+        let mut claims = self.idempotency.borrow_mut();
+        let entry = claims
+            .entry((id.clone(), key.to_owned()))
+            .or_insert((IdempotencyState::Pending, 0));
+        if entry.1 > now {
+            return Ok(Some(entry.0));
+        }
+        *entry = (IdempotencyState::Pending, expires_at);
+        Ok(None)
     }
 
-    async fn record_idempotent(
+    async fn finish_idempotency(
         &self,
         id: &EndpointId,
         key: &str,
-        status: u16,
-        expires_at: u64,
+        delivered: bool,
     ) -> Result<(), Error> {
-        self.idempotency
-            .borrow_mut()
-            .insert((id.clone(), key.to_owned()), (status, expires_at));
+        let mut claims = self.idempotency.borrow_mut();
+        let k = (id.clone(), key.to_owned());
+        if delivered {
+            if let Some(claim) = claims.get_mut(&k) {
+                claim.0 = IdempotencyState::Delivered;
+            }
+        } else {
+            claims.remove(&k);
+        }
         Ok(())
     }
 }
@@ -186,9 +195,20 @@ mod tests {
             assert_eq!(store.get(&id).await, Ok(None));
             store.put(&registration(&id)).await.unwrap();
             assert_eq!(store.get(&id).await.unwrap().unwrap().target, "fid");
-            store.record_idempotent(&id, "k", 201, 100).await.unwrap();
-            assert_eq!(store.idempotent_status(&id, "k", 99).await, Ok(Some(201)));
-            assert_eq!(store.idempotent_status(&id, "k", 100).await, Ok(None));
+            assert_eq!(store.claim_idempotency(&id, "k", 0, 100).await, Ok(None));
+            assert_eq!(
+                store.claim_idempotency(&id, "k", 50, 150).await,
+                Ok(Some(IdempotencyState::Pending))
+            );
+            store.finish_idempotency(&id, "k", true).await.unwrap();
+            assert_eq!(
+                store.claim_idempotency(&id, "k", 99, 199).await,
+                Ok(Some(IdempotencyState::Delivered))
+            );
+            // Expired claims can be taken again; failed sends release theirs.
+            assert_eq!(store.claim_idempotency(&id, "k", 100, 200).await, Ok(None));
+            store.finish_idempotency(&id, "k", false).await.unwrap();
+            assert_eq!(store.claim_idempotency(&id, "k", 101, 201).await, Ok(None));
             store.delete(&id).await.unwrap();
             assert_eq!(store.get(&id).await, Ok(None));
         });
