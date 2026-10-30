@@ -32,7 +32,12 @@ pub struct ServiceAccount {
     pub token_uri: String,
     /// PKCS#8 DER of `private_key`.
     pub private_key_der: Vec<u8>,
+    /// FCM API origin; [`API_BASE`] unless a test points it at a fake FCM.
+    pub api_base: String,
 }
+
+/// Production FCM HTTP v1 origin.
+pub const API_BASE: &str = "https://fcm.googleapis.com";
 
 impl ServiceAccount {
     /// Parses the JSON key file downloaded from the Firebase console.
@@ -63,6 +68,7 @@ impl ServiceAccount {
             client_email: file.client_email,
             token_uri: file.token_uri,
             private_key_der,
+            api_base: API_BASE.into(),
         })
     }
 }
@@ -111,8 +117,8 @@ impl<C: Crypto, H: HttpClient, T: TokenCache> Fcm<'_, C, H, T> {
         let token = self.access_token(now).await?;
         let request = HttpRequest {
             url: format!(
-                "https://fcm.googleapis.com/v1/projects/{}/messages:send",
-                self.account.project_id
+                "{}/v1/projects/{}/messages:send",
+                self.account.api_base, self.account.project_id
             ),
             headers: vec![
                 ("Authorization".into(), format!("Bearer {token}")),

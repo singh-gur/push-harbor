@@ -38,6 +38,12 @@ bench-vapid:
     rustup target add wasm32-wasip1
     cargo run -q --release -p pushharbor-core --example vapid_bench --target wasm32-wasip1
 
+# Conformance suite against a running relay configured per crates/conformance docs; optional log check
+conformance relay_url log="":
+    rm -f target/conformance-secrets.txt
+    RELAY_URL={{relay_url}} cargo test -p pushharbor-conformance --test conformance
+    RELAY_LOG={{log}} cargo test -p pushharbor-conformance --test logs
+
 # Run the native server
 run-native *args:
     cargo run -p pushharbor-native -- {{args}}

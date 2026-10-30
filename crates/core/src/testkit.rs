@@ -33,6 +33,7 @@ impl World {
                 client_email: "relay@demo".into(),
                 token_uri: "https://oauth2.googleapis.com/token".into(),
                 private_key_der: vec![0],
+                api_base: crate::fcm::API_BASE.into(),
             },
             store: MemoryStore::default(),
             limiter: MemoryRateLimiter::default(),
