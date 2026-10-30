@@ -1,0 +1,10 @@
+target
+**/target
+**/node_modules
+spikes
+.git
+.github
+**/*.db
+**/service-account*.json
+**/google-services.json
+!crates/conformance/fixtures/service-account.json

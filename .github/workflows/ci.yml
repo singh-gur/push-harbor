@@ -25,3 +25,26 @@ jobs:
         env:
           CARGO_TARGET_WASM32_WASIP1_RUNNER: node --no-warnings ${{ github.workspace }}/scripts/wasi-run.mjs
       - run: cargo build -p pushharbor-core -p pushharbor-worker --target wasm32-unknown-unknown
+
+  # The shared conformance suite (crates/conformance) against each hosting configuration.
+  conformance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [native]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: just conformance-${{ matrix.config }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t pushharbor-native:ci .
+      - run: docker run --rm pushharbor-native:ci --help
