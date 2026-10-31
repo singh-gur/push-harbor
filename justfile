@@ -18,6 +18,7 @@ fmt:
 lint:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy -p pushharbor-worker --target {{wasm_target}} -- -D warnings
 
 # Run all tests
 test:
@@ -72,27 +73,41 @@ conformance-postgres:
         cargo test -p pushharbor-conformance --test multi_instance && \
         CONFORMANCE_SECRETS={{secrets}} RELAY_LOG=$log.b cargo test -p pushharbor-conformance --test logs"
 
+# Conformance suite against the Workers adapter in `wrangler dev` (local workerd + Durable
+# Objects). Needs node and worker-build (`cargo install worker-build@0.8.7`).
+conformance-worker:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    log=$(mktemp)
+    scripts/with-worker.sh http://127.0.0.1:8787 "$log" just conformance http://127.0.0.1:8787 "$log"
+
 # Install the interop senders' dependencies (needs node, go, docker; python runs via uv)
 interop-setup:
     cd interop/node && npm ci --silent
     cd interop/go && go build -o ../../target/interop/go-send .
     docker run --rm -v "$PWD/interop/php":/app:Z -w /app composer:2 install -q --no-progress
 
-# Sender interop (PH-22): Web Push libraries send to the native relay behind a local TLS proxy
-interop-native libs="node,python,go,php": interop-setup
+# Sender interop (PH-22): Web Push libraries send to a relay (`native` or `worker`) behind a
+# local TLS proxy on port 443, in a container so no root is needed (web-push-php drops the port
+# from the VAPID aud; Node's web-push only speaks HTTPS)
+interop relay="native" libs="node,python,go,php": interop-setup
     #!/usr/bin/env bash
     set -euo pipefail
     dir=target/interop; mkdir -p $dir
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=127.0.0.1 \
       -addext subjectAltName=IP:127.0.0.1 -keyout $dir/tls-key.pem -out $dir/tls-cert.pem 2>/dev/null
-    # Port 443 (in a container, so no root is needed): web-push-php drops the port from the VAPID aud.
+    port=$([ {{relay}} = worker ] && echo 8787 || echo 8080)
     docker run -d --rm --name ph-tls-proxy --network host -v "$PWD":/repo:Z -w /repo node:24-alpine \
-      node interop/tls-proxy.mjs 443 8080 $dir/tls-cert.pem $dir/tls-key.pem >/dev/null
+      node interop/tls-proxy.mjs 443 $port $dir/tls-cert.pem $dir/tls-key.pem >/dev/null
     trap 'docker rm -f ph-tls-proxy >/dev/null 2>&1 || true' EXIT
-    RELAY_URL=http://127.0.0.1:8080 INTEROP_LIBS={{libs}} INTEROP_CA=$PWD/$dir/tls-cert.pem \
-    CONFORMANCE_SECRETS={{secrets}} scripts/with-native.sh https://127.0.0.1 \
-      "sqlite://$(mktemp -d)/pushharbor.db" "$(mktemp)" \
-      cargo test -p pushharbor-conformance --test interop -- --nocapture
+    export RELAY_URL=http://127.0.0.1:$port INTEROP_LIBS={{libs}} INTEROP_CA=$PWD/$dir/tls-cert.pem \
+      CONFORMANCE_SECRETS={{secrets}}
+    test="cargo test -p pushharbor-conformance --test interop -- --nocapture"
+    if [ {{relay}} = worker ]; then
+      scripts/with-worker.sh https://127.0.0.1 "$(mktemp)" $test
+    else
+      scripts/with-native.sh https://127.0.0.1 "sqlite://$(mktemp -d)/pushharbor.db" "$(mktemp)" $test
+    fi
 
 # Run the native server
 run-native *args:

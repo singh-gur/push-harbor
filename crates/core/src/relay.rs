@@ -60,6 +60,37 @@ impl Default for RateLimits {
     }
 }
 
+impl RateLimits {
+    /// Overrides from configuration: `lookup("GLOBAL")` etc. (the `<NAME>` of
+    /// `PUSHHARBOR_LIMIT_<NAME>`) returns `limit/window_secs`, e.g. `600/60`. Unset names keep the
+    /// default. The error names the bad setting.
+    pub fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, String> {
+        let defaults = Self::default();
+        let limit = |name: &str, default: RateLimit| -> Result<RateLimit, String> {
+            let Some(value) = lookup(name) else {
+                return Ok(default);
+            };
+            let parsed = value.split_once('/').and_then(|(limit, window)| {
+                Some(RateLimit {
+                    limit: limit.trim().parse().ok()?,
+                    window_secs: window.trim().parse().ok()?,
+                })
+            });
+            parsed.filter(|l| l.window_secs > 0).ok_or(format!(
+                "PUSHHARBOR_LIMIT_{name} must look like 60/60 (limit/window seconds)"
+            ))
+        };
+        Ok(Self {
+            global: limit("GLOBAL", defaults.global)?,
+            per_ip: limit("PER_IP", defaults.per_ip)?,
+            per_sender: limit("PER_SENDER", defaults.per_sender)?,
+            per_endpoint: limit("PER_ENDPOINT", defaults.per_endpoint)?,
+            registrations_per_ip: limit("REGISTRATIONS_PER_IP", defaults.registrations_per_ip)?,
+            challenges_per_target: limit("CHALLENGES_PER_TARGET", defaults.challenges_per_target)?,
+        })
+    }
+}
+
 /// One incoming Web Push request, as the adapter received it.
 #[derive(Debug, Clone, Copy)]
 pub struct SendRequest<'a> {
@@ -172,6 +203,29 @@ mod tests {
     use super::*;
     use crate::testkit::*;
     use serde_json::Value;
+
+    #[test]
+    fn limits_from_configuration() {
+        let limits = RateLimits::from_lookup(|name| match name {
+            "PER_SENDER" => Some("10/60".into()),
+            "GLOBAL" => Some(" 5 / 1 ".into()),
+            _ => None,
+        })
+        .unwrap();
+        assert_eq!(
+            (limits.per_sender.limit, limits.per_sender.window_secs),
+            (10, 60)
+        );
+        assert_eq!((limits.global.limit, limits.global.window_secs), (5, 1));
+        assert_eq!(limits.per_ip, RateLimits::default().per_ip);
+        for bad in ["10", "10/0", "x/60", "-1/60"] {
+            let err = RateLimits::from_lookup(|n| (n == "PER_IP").then(|| bad.into()));
+            assert!(
+                err.unwrap_err().contains("PUSHHARBOR_LIMIT_PER_IP"),
+                "{bad}"
+            );
+        }
+    }
 
     #[test]
     fn delivers_through_fcm() {

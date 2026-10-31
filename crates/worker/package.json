@@ -1,0 +1,8 @@
+{
+  "name": "pushharbor-worker",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "4.156.0"
+  }
+}

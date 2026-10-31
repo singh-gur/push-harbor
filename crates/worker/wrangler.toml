@@ -1,0 +1,26 @@
+# Pushharbor on Cloudflare Workers. Deploy: set PUSHHARBOR_ORIGIN to the public origin, then
+#   npx wrangler secret put PUSHHARBOR_FCM_SERVICE_ACCOUNT < service-account.json
+#   npx wrangler deploy
+# Optional vars (same as native): PUSHHARBOR_LIMIT_<NAME> ("limit/window_secs"),
+# PUSHHARBOR_PROVIDER_TIMEOUT_SECS.
+name = "pushharbor"
+main = "build/index.js"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "worker-build --release"
+
+[vars]
+PUSHHARBOR_ORIGIN = "http://127.0.0.1:8787"
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayObject"]
+
+# Off on purpose: Workers Logs record request URLs, and endpoint IDs in them are capabilities.
+[observability]
+enabled = false

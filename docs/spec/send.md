@@ -144,5 +144,5 @@ Measured with each library sending a 2,797-byte plaintext (the maximum):
 | web-push-php 11.0 | **`setAutomaticPadding(false)`** (otherwise 2,922 B → 413) | custom PSR-18 client only | Drops the port from the VAPID `aud`, so it only works with relays on the default port (443), as production relays are. `MessageSentReport::isSubscriptionExpired()` is true for 404/410. |
 
 All four send 12-hour VAPID tokens, well within the 24 h + 5 min limit. `interop/` holds a
-sender program per library using exactly these settings; `just interop-native` runs them against
-the native relay in CI.
+sender program per library using exactly these settings; `just interop native` and
+`just interop worker` run them against both relays in CI.

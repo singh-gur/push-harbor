@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use pushharbor_core::fcm::{self, ServiceAccount};
-use pushharbor_core::relay::{RateLimit, RateLimits};
+use pushharbor_core::relay::RateLimits;
 
 pub struct Config {
     /// Public origin (`https://push.example.com`): VAPID `aud` and the base of endpoint URLs.
@@ -73,21 +73,7 @@ impl Config {
             .map_err(|_| "invalid FCM service account JSON")?;
         fcm.api_base = var("PUSHHARBOR_FCM_API_BASE").unwrap_or_else(|| fcm::API_BASE.into());
 
-        let defaults = RateLimits::default();
-        let limit = |name: &str, default: RateLimit| -> Result<RateLimit, String> {
-            let Some(value) = var(&format!("PUSHHARBOR_LIMIT_{name}")) else {
-                return Ok(default);
-            };
-            let parsed = value.split_once('/').and_then(|(limit, window)| {
-                Some(RateLimit {
-                    limit: limit.parse().ok()?,
-                    window_secs: window.parse().ok()?,
-                })
-            });
-            parsed.filter(|l| l.window_secs > 0).ok_or(format!(
-                "PUSHHARBOR_LIMIT_{name} must look like 60/60 (limit/window seconds)"
-            ))
-        };
+        let limits = RateLimits::from_lookup(|name| var(&format!("PUSHHARBOR_LIMIT_{name}")))?;
 
         Ok(Self {
             origin,
@@ -107,17 +93,7 @@ impl Config {
                     .transpose()?
                     .unwrap_or(10),
             ),
-            limits: RateLimits {
-                global: limit("GLOBAL", defaults.global)?,
-                per_ip: limit("PER_IP", defaults.per_ip)?,
-                per_sender: limit("PER_SENDER", defaults.per_sender)?,
-                per_endpoint: limit("PER_ENDPOINT", defaults.per_endpoint)?,
-                registrations_per_ip: limit("REGISTRATIONS_PER_IP", defaults.registrations_per_ip)?,
-                challenges_per_target: limit(
-                    "CHALLENGES_PER_TARGET",
-                    defaults.challenges_per_target,
-                )?,
-            },
+            limits,
             trust_proxy: var("PUSHHARBOR_TRUST_PROXY").is_some_and(|v| v == "true" || v == "1"),
         })
     }
