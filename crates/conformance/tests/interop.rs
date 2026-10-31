@@ -261,3 +261,125 @@ async fn sender_libraries() {
         eprintln!("{lib}: {} cases ok", expected.len());
     }
 }
+
+/// The example senders shown in docs/sending.md (`examples/senders/<lib>`), with the CA trusted
+/// like the interop senders. Arguments: subscription file, envelope.
+fn example_command(lib: &str, ca: &str) -> Command {
+    let root = repo_root();
+    match lib {
+        "node" => {
+            let mut c = Command::new("node");
+            c.arg(root.join("examples/senders/node/send.mjs"))
+                .env("NODE_EXTRA_CA_CERTS", ca);
+            c
+        }
+        "python" => {
+            let mut c = Command::new("uv");
+            c.args(["run", "-q", "--with", "pywebpush==2.5.0", "python"])
+                .arg(root.join("examples/senders/python/send.py"))
+                .env("REQUESTS_CA_BUNDLE", ca);
+            c
+        }
+        "go" => {
+            let mut c = Command::new(root.join("target/interop/example-go"));
+            c.env("SSL_CERT_FILE", ca);
+            c
+        }
+        other => panic!("no example for {other}"),
+    }
+}
+
+/// docs/sending.md's examples, run as written: delivered (exit 0, the device decrypts exactly
+/// the envelope), gone (exit 2), provider down (retried 3 times, then exit 1).
+#[tokio::test]
+async fn documented_examples() {
+    let Ok(libs) = std::env::var("INTEROP_LIBS") else {
+        return;
+    };
+    let r = Relay::from_env().expect("RELAY_URL");
+    let ca = std::env::var("INTEROP_CA").expect("INTEROP_CA");
+    let dir = repo_root().join("target/interop");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    for lib in libs
+        .split(',')
+        .filter(|l| matches!(*l, "node" | "python" | "go"))
+    {
+        let sender = new_sender();
+        let ua = p256::SecretKey::from_slice(&random_bytes::<32>()).unwrap();
+        let auth = random_bytes::<16>();
+        let p256dh = URL_SAFE_NO_PAD.encode(
+            p256::elliptic_curve::sec1::ToSec1Point::to_sec1_point(&ua.public_key(), false)
+                .as_bytes(),
+        );
+        // webpush-go adds "mailto:" itself.
+        let subject = if lib == "go" {
+            "examples@example.com"
+        } else {
+            "mailto:examples@example.com"
+        };
+        let envelope = json!({"t": "From the guide", "b": format!("sent by the {lib} example"),
+            "g": "guide", "d": {"lib": lib}})
+        .to_string();
+
+        for (case, prefix, want_exit) in [
+            ("delivered", "ok", 0),
+            ("gone", "gone", 2),
+            ("down", "down", 1),
+        ] {
+            let sub = r
+                .subscribe(&sender, &format!("{prefix}-{lib}-{}", random_id()))
+                .await;
+            // Exactly what the Expo module hands to the app: PushSubscription JSON plus `id`.
+            let subscription = json!({"id": sub.key_id, "endpoint": sub.endpoint,
+                "expirationTime": null, "keys": {"p256dh": p256dh, "auth": URL_SAFE_NO_PAD.encode(auth)}});
+            let path = dir.join(format!("example-{lib}-{case}.json"));
+            std::fs::write(&path, subscription.to_string()).unwrap();
+
+            let output = tokio::task::spawn_blocking({
+                let (lib, ca, envelope) = (lib.to_owned(), ca.clone(), envelope.clone());
+                let (public, private) = (
+                    public_key_b64(&sender),
+                    URL_SAFE_NO_PAD.encode(sender.to_bytes()),
+                );
+                move || {
+                    example_command(&lib, &ca)
+                        .arg(&path)
+                        .arg(&envelope)
+                        .env("VAPID_PUBLIC_KEY", public)
+                        .env("VAPID_PRIVATE_KEY", private)
+                        .env("VAPID_SUBJECT", subject)
+                        .output()
+                }
+            })
+            .await
+            .unwrap()
+            .unwrap_or_else(|e| panic!("{lib}: cannot start the example: {e}"));
+            assert_eq!(
+                output.status.code(),
+                Some(want_exit),
+                "{lib} example, {case}: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+
+            let payloads: Vec<String> = r
+                .fcm
+                .messages_for(&sub.fid)
+                .iter()
+                .filter_map(|m| m["data"]["p"].as_str())
+                .map(|p| decrypt(&URL_SAFE_NO_PAD.decode(p).unwrap(), &ua, &auth).unwrap())
+                .collect();
+            match case {
+                "delivered" => assert_eq!(
+                    payloads,
+                    vec![envelope.clone()],
+                    "{lib}: delivered once, intact"
+                ),
+                "down" => assert_eq!(payloads.len(), 3, "{lib}: retried 3 times in total"),
+                _ => {}
+            }
+        }
+        eprintln!("{lib}: documented example ok");
+    }
+}

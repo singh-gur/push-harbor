@@ -115,6 +115,8 @@ conformance-migration:
 interop-setup:
     cd interop/node && npm ci --silent
     cd interop/go && go build -o ../../target/interop/go-send .
+    cd examples/senders/node && npm ci --silent
+    cd examples/senders/go && go build -o ../../../target/interop/example-go .
     docker run --rm -v "$PWD/interop/php":/app:Z -w /app composer:2 install -q --no-progress
 
 # Sender interop (PH-22): Web Push libraries send to a relay (`native` or `worker`) behind a

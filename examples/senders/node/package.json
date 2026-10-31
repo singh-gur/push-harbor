@@ -1,0 +1,9 @@
+{
+  "name": "pushharbor-sender-example-node",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "title": "Pushharbor: how a notification travels",
+  "subtitle": "One relay per published app; servers are the app's self-hosted backends",
+  "style": "clean",
+  "iconsDir": "../assets/icons",
+  "nodes": [
+    {
+      "id": "app",
+      "col": 0,
+      "row": 0,
+      "kind": "client",
+      "label": "App on the device",
+      "sublabel": "Expo module: keys, decrypt",
+      "icon": "mdi--cellphone.svg"
+    },
+    {
+      "id": "server",
+      "col": 2,
+      "row": 0,
+      "kind": "service",
+      "label": "App's server",
+      "sublabel": "self-hosted, any Web Push library",
+      "icon": "mdi--server.svg"
+    },
+    {
+      "id": "relay",
+      "col": 1,
+      "row": 1,
+      "kind": "accent",
+      "label": "Pushharbor relay",
+      "sublabel": "Workers or native container",
+      "icon": "mdi--transit-connection-variant.svg"
+    },
+    {
+      "id": "fcm",
+      "col": 0,
+      "row": 1,
+      "kind": "external",
+      "label": "FCM",
+      "sublabel": "Android",
+      "icon": "simple-icons--firebase.svg"
+    },
+    {
+      "id": "apns",
+      "col": 2,
+      "row": 1,
+      "kind": "platform",
+      "label": "APNs",
+      "sublabel": "iOS, planned",
+      "icon": "simple-icons--apple.svg"
+    }
+  ],
+  "groups": [
+    {
+      "id": "ciphertext",
+      "title": "Ciphertext only",
+      "kind": "boundary",
+      "cols": [
+        0,
+        2
+      ],
+      "rows": [
+        1,
+        1
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "server",
+      "label": "VAPID key / subscription",
+      "bidirectional": true
+    },
+    {
+      "from": "app",
+      "to": "relay",
+      "label": "register + challenge",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "from": "server",
+      "to": "relay",
+      "label": "Web Push: VAPID, aes128gcm",
+      "kind": "secure",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "from": "relay",
+      "to": "fcm",
+      "label": "ciphertext",
+      "kind": "data",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "from": "fcm",
+      "to": "app",
+      "label": "data message",
+      "kind": "data",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "relay",
+      "to": "apns",
+      "label": "planned",
+      "kind": "async",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "legend": [
+    {
+      "edgeKind": "secure",
+      "label": "Signed by the sender's VAPID key"
+    },
+    {
+      "edgeKind": "data",
+      "label": "Encrypted payload"
+    },
+    {
+      "edgeKind": "async",
+      "label": "Planned"
+    }
+  ],
+  "note": "The server encrypts each payload for the device (RFC 8291); only the app can decrypt it. The relay checks the VAPID signature against the key bound to the endpoint, then forwards the ciphertext.",
+  "layout": {
+    "laneStep": 48,
+    "nodeWidth": 230
+  }
+}

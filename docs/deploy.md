@@ -16,8 +16,23 @@ Every option needs:
 - **An origin**: the public HTTPS URL of the relay, e.g. `https://push.example.com`. Endpoint
   URLs contain it and senders sign VAPID tokens for it, so it must stay the same for the life of
   the deployment. Use the default HTTPS port (web-push-php ignores other ports).
-- **A Firebase service account** (Firebase console → Project settings → Service accounts →
-  Generate new private key) for the Firebase project your app uses. Keep the file secret.
+- **A Firebase service account** for your app's Firebase project (below). Keep the file secret.
+
+## Firebase project
+
+The relay delivers to Android through Firebase Cloud Messaging, with the Firebase project your
+app is built with:
+
+1. In the [Firebase console](https://console.firebase.google.com/), create a project (or use
+   the app's existing one) and **add an Android app** with your app's package name. Download its
+   `google-services.json` for the app build ([Expo module guide](expo.md)).
+2. Cloud Messaging uses the FCM HTTP v1 API, which is enabled for new projects (Project settings
+   → Cloud Messaging).
+3. **Project settings → Service accounts → Generate new private key.** This JSON file is the
+   relay's credential; it can send to every install of your app. Give it only to the relay.
+
+One relay and one Firebase project per published app. Every self-hosted server of that app sends
+through the same relay; they need no Firebase access.
 
 Configuration is the same everywhere: `pushharbor-native --help` lists every variable
 (`PUSHHARBOR_ORIGIN`, `PUSHHARBOR_LIMIT_<NAME>`, `PUSHHARBOR_TRUST_PROXY`, ...).
@@ -127,6 +142,12 @@ gcloud run services add-iam-policy-binding pushharbor --region=REGION \
   repository in front of `ghcr.io`.
 - This configuration is tested locally with the same container contract (no disk, secret file,
   Cloud SQL Unix socket), not on Google Cloud itself.
+
+## Moving between options
+
+Registrations move with an export/import: same origin, same Firebase project, then switch DNS.
+The step-by-step procedure, the admin API and the native CLI are in
+[docs/spec/export.md](spec/export.md#moving-a-deployment). Apps and servers notice nothing.
 
 ## Smoke tests
 
