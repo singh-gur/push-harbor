@@ -1,18 +1,20 @@
-//! Pushharbor native server (axum + tokio + SQLite) for containers, VPS and Kubernetes.
+//! Pushharbor native server (axum + tokio + SQLite or PostgreSQL) for containers, VPS and
+//! Kubernetes.
 
 mod adapters;
 mod config;
 mod server;
 
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+use sqlx::AnyPool;
+use sqlx::any::AnyPoolOptions;
 
 use crate::adapters::{
-    MemoryRateLimiter, MemoryTokenCache, NativeCrypto, ReqwestHttp, SqliteStore, now, purge_expired,
+    MemoryRateLimiter, MemoryTokenCache, NativeCrypto, NativeRateLimiter, ReqwestHttp,
+    SqlRateLimiter, SqlStore, now, purge_expired,
 };
 use crate::config::{Config, USAGE};
 use crate::server::{AppState, router};
@@ -38,16 +40,14 @@ async fn main() {
         std::process::exit(2);
     });
 
-    let options = SqliteConnectOptions::from_str(&config.database_url)
-        .unwrap_or_else(|e| fail(&format!("PUSHHARBOR_DATABASE_URL: {e}")))
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .busy_timeout(Duration::from_secs(5));
-    let pool = SqlitePoolOptions::new()
-        .connect_with(options)
-        .await
-        .unwrap_or_else(|e| fail(&format!("can't open database: {e}")));
-    sqlx::migrate!()
+    let (pool, postgres) = open_database(&config.database_url).await;
+    let migrator = if postgres {
+        sqlx::migrate!("migrations/postgres")
+    } else {
+        sqlx::migrate!("migrations/sqlite")
+    };
+    // Concurrent instances are safe: sqlx takes a database lock while migrating.
+    migrator
         .run(&pool)
         .await
         .unwrap_or_else(|e| fail(&format!("database migration failed: {e}")));
@@ -57,19 +57,25 @@ async fn main() {
         let mut interval = tokio::time::interval(PURGE_EVERY);
         loop {
             interval.tick().await;
-            if let Err(e) = purge_expired(&purge_pool, now()).await {
+            if let Err(e) = purge_expired(&purge_pool, postgres, now()).await {
                 tracing::warn!(error = %e, "purging expired rows failed");
             }
         }
     });
+
+    let limiter = if postgres {
+        NativeRateLimiter::Shared(SqlRateLimiter(pool.clone()))
+    } else {
+        NativeRateLimiter::Memory(MemoryRateLimiter::default())
+    };
 
     let state = Arc::new(AppState {
         origin: config.origin.clone(),
         limits: config.limits,
         trust_proxy: config.trust_proxy,
         account: config.fcm,
-        store: SqliteStore(pool),
-        limiter: MemoryRateLimiter::default(),
+        store: SqlStore(pool),
+        limiter,
         crypto: NativeCrypto::default(),
         http: ReqwestHttp::new(config.provider_timeout),
         cache: MemoryTokenCache::default(),
@@ -86,6 +92,35 @@ async fn main() {
     .await
     .unwrap_or_else(|e| fail(&format!("server error: {e}")));
     tracing::info!("shut down");
+}
+
+/// `sqlite://<path>` (created if missing, WAL) or `postgres://…`. Returns the pool and whether it
+/// is PostgreSQL.
+async fn open_database(url: &str) -> (AnyPool, bool) {
+    sqlx::any::install_default_drivers();
+    let postgres = url.starts_with("postgres://") || url.starts_with("postgresql://");
+    let url = match url.strip_prefix("sqlite://") {
+        Some(_) if url.contains('?') => url.to_owned(),
+        Some(_) => format!("{url}?mode=rwc"),
+        None if postgres => url.to_owned(),
+        None => fail("PUSHHARBOR_DATABASE_URL must start with sqlite:// or postgres://"),
+    };
+    let pool = AnyPoolOptions::new()
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                if !postgres {
+                    // WAL lets reads run during writes; sqlx's busy timeout (5 s) covers the rest.
+                    sqlx::query("PRAGMA journal_mode = WAL")
+                        .execute(conn)
+                        .await?;
+                }
+                Ok(())
+            })
+        })
+        .connect(&url)
+        .await
+        .unwrap_or_else(|e| fail(&format!("can't open database: {e}")));
+    (pool, postgres)
 }
 
 fn fail(message: &str) -> ! {

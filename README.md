@@ -11,6 +11,8 @@ Open-source, Web Push compatible push relay that lets self-hosted servers of an 
 - `crates/native` – axum/tokio server for containers (SQLite / PostgreSQL)
 - `crates/conformance` – black-box test suite every hosting option must pass
 - `docs/spec` – protocol specification v1 and test vectors
+- `packages/expo` – Expo / React Native client module (Android), example app in `examples/expo`
+- `interop` – Web Push sender libraries (Node, Python, Go, PHP) tested against the relay
 
 Run `just` to list development tasks.
 

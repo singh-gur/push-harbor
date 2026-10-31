@@ -21,7 +21,7 @@ use serde_json::json;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::adapters::{
-    MemoryRateLimiter, MemoryTokenCache, NativeCrypto, ReqwestHttp, SqliteStore, now,
+    MemoryTokenCache, NativeCrypto, NativeRateLimiter, ReqwestHttp, SqlStore, now,
 };
 
 /// Request bodies are at most 2,900 B (push) or small JSON; anything near this is abuse.
@@ -33,8 +33,8 @@ pub struct AppState {
     pub limits: RateLimits,
     pub trust_proxy: bool,
     pub account: ServiceAccount,
-    pub store: SqliteStore,
-    pub limiter: MemoryRateLimiter,
+    pub store: SqlStore,
+    pub limiter: NativeRateLimiter,
     pub crypto: NativeCrypto,
     pub http: ReqwestHttp,
     pub cache: MemoryTokenCache,
@@ -43,8 +43,7 @@ pub struct AppState {
 impl AppState {
     fn relay(
         &self,
-    ) -> Relay<'_, SqliteStore, MemoryRateLimiter, NativeCrypto, ReqwestHttp, MemoryTokenCache>
-    {
+    ) -> Relay<'_, SqlStore, NativeRateLimiter, NativeCrypto, ReqwestHttp, MemoryTokenCache> {
         Relay {
             origin: &self.origin,
             limits: &self.limits,

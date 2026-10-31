@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [native]
+        config: [native, postgres]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

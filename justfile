@@ -53,6 +53,25 @@ conformance-native:
     scripts/with-native.sh http://127.0.0.1:8080 "sqlite://$(mktemp -d)/pushharbor.db" "$log" \
       just conformance http://127.0.0.1:8080 "$log"
 
+# Conformance suite against two native instances sharing a PostgreSQL database (Docker), plus
+# the multi-instance test (shared limits, idempotency and pending registrations)
+conformance-postgres:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker rm -f ph-postgres >/dev/null 2>&1 || true
+    docker run -d --rm --name ph-postgres -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql \
+      -e POSTGRES_PASSWORD=pushharbor -e POSTGRES_DB=pushharbor postgres:17-alpine >/dev/null
+    trap 'docker rm -f ph-postgres >/dev/null 2>&1 || true' EXIT
+    for _ in $(seq 60); do docker exec ph-postgres pg_isready -q -U postgres -d pushharbor && break; sleep 0.5; done
+    db=postgres://postgres:pushharbor@127.0.0.1:55432/pushharbor
+    log=$(mktemp)
+    scripts/with-native.sh http://127.0.0.1:8080 $db "$log" \
+      env PUSHHARBOR_LISTEN=127.0.0.1:8081 scripts/with-native.sh http://127.0.0.1:8080 $db "$log.b" \
+      bash -c "just conformance http://127.0.0.1:8080 $log && \
+        RELAY_URL=http://127.0.0.1:8080 RELAY_URL_2=http://127.0.0.1:8081 CONFORMANCE_SECRETS={{secrets}} \
+        cargo test -p pushharbor-conformance --test multi_instance && \
+        CONFORMANCE_SECRETS={{secrets}} RELAY_LOG=$log.b cargo test -p pushharbor-conformance --test logs"
+
 # Install the interop senders' dependencies (needs node, go, docker; python runs via uv)
 interop-setup:
     cd interop/node && npm ci --silent

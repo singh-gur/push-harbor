@@ -1,5 +1,8 @@
-//! Core adapter traits for the native server: SQLite (sqlx), in-process rate limits and token
-//! cache, aws-lc-rs crypto, reqwest HTTP.
+//! Core adapter traits for the native server: SQLite or PostgreSQL (sqlx `Any`, one set of
+//! statements for both), rate limits in process memory (SQLite, single instance) or in PostgreSQL
+//! (shared by all instances), in-process token cache, aws-lc-rs crypto, reqwest HTTP.
+//!
+//! Statements use `$n` placeholders in first-use order, which both backends bind positionally.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -14,8 +17,8 @@ use pushharbor_core::adapter::{
 };
 use pushharbor_core::model::{EndpointId, KeyId, PendingRegistration, Platform, Registration};
 use pushharbor_core::vapid::{PublicKey, verify_es256_p256};
-use sqlx::sqlite::SqliteRow;
-use sqlx::{Row, SqlitePool};
+use sqlx::any::AnyRow;
+use sqlx::{AnyPool, Row};
 
 pub fn now() -> u64 {
     SystemTime::now()
@@ -105,7 +108,7 @@ impl TokenCache for MemoryTokenCache {
 }
 
 /// Fixed-window counters in process memory: correct for a single instance (SQLite). Multiple
-/// instances need shared counters (PostgreSQL, PH-26).
+/// instances share [`SqlRateLimiter`] instead.
 #[derive(Default)]
 pub struct MemoryRateLimiter(Mutex<HashMap<String, (u64, u32)>>);
 
@@ -139,7 +142,8 @@ impl RateLimiter for MemoryRateLimiter {
     }
 }
 
-pub struct SqliteStore(pub SqlitePool);
+/// SQLite or PostgreSQL, chosen by the database URL.
+pub struct SqlStore(pub AnyPool);
 
 fn db_error(e: sqlx::Error) -> Error {
     // sqlx errors carry no bound values, so this can't leak targets or keys.
@@ -162,16 +166,16 @@ fn parse_platform(name: &str) -> Result<Platform, Error> {
     }
 }
 
-fn sender_key(row: &SqliteRow) -> Result<PublicKey, Error> {
+fn sender_key(row: &AnyRow) -> Result<PublicKey, Error> {
     let bytes: Vec<u8> = row.try_get("sender_key").map_err(db_error)?;
     bytes.try_into().map_err(|_| Error::Internal)
 }
 
-fn key_id(row: &SqliteRow) -> Result<KeyId, Error> {
+fn key_id(row: &AnyRow) -> Result<KeyId, Error> {
     KeyId::parse(row.try_get("key_id").map_err(db_error)?).ok_or(Error::Internal)
 }
 
-fn registration(row: &SqliteRow) -> Result<Registration, Error> {
+fn registration(row: &AnyRow) -> Result<Registration, Error> {
     Ok(Registration {
         endpoint: EndpointId::parse(row.try_get("endpoint").map_err(db_error)?)
             .ok_or(Error::Internal)?,
@@ -183,7 +187,7 @@ fn registration(row: &SqliteRow) -> Result<Registration, Error> {
     })
 }
 
-fn pending(row: &SqliteRow) -> Result<PendingRegistration, Error> {
+fn pending(row: &AnyRow) -> Result<PendingRegistration, Error> {
     let replaces: Option<String> = row.try_get("replaces").map_err(db_error)?;
     Ok(PendingRegistration {
         rid: EndpointId::parse(row.try_get("rid").map_err(db_error)?).ok_or(Error::Internal)?,
@@ -201,9 +205,9 @@ fn pending(row: &SqliteRow) -> Result<PendingRegistration, Error> {
     })
 }
 
-impl Store for SqliteStore {
+impl Store for SqlStore {
     async fn get(&self, id: &EndpointId) -> Result<Option<Registration>, Error> {
-        sqlx::query("SELECT * FROM registrations WHERE endpoint = ?")
+        sqlx::query("SELECT * FROM registrations WHERE endpoint = $1")
             .bind(id.as_str())
             .fetch_optional(&self.0)
             .await
@@ -216,7 +220,7 @@ impl Store for SqliteStore {
     async fn put(&self, r: &Registration) -> Result<(), Error> {
         sqlx::query(
             "INSERT INTO registrations (endpoint, platform, target, key_id, sender_key, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)
+             VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (endpoint) DO UPDATE SET platform = excluded.platform, target = excluded.target,
                  key_id = excluded.key_id, sender_key = excluded.sender_key",
         )
@@ -233,7 +237,7 @@ impl Store for SqliteStore {
     }
 
     async fn delete(&self, id: &EndpointId) -> Result<(), Error> {
-        sqlx::query("DELETE FROM registrations WHERE endpoint = ?")
+        sqlx::query("DELETE FROM registrations WHERE endpoint = $1")
             .bind(id.as_str())
             .execute(&self.0)
             .await
@@ -243,9 +247,10 @@ impl Store for SqliteStore {
 
     async fn put_pending(&self, p: &PendingRegistration) -> Result<(), Error> {
         sqlx::query(
-            "INSERT OR REPLACE INTO pending_registrations
+            "INSERT INTO pending_registrations
                  (rid, platform, target, key_id, sender_key, nonce, expires_at, challenges_sent, replaces)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (rid) DO UPDATE SET challenges_sent = excluded.challenges_sent",
         )
         .bind(p.rid.as_str())
         .bind(platform_name(p.platform))
@@ -263,7 +268,7 @@ impl Store for SqliteStore {
     }
 
     async fn get_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error> {
-        sqlx::query("SELECT * FROM pending_registrations WHERE rid = ?")
+        sqlx::query("SELECT * FROM pending_registrations WHERE rid = $1")
             .bind(rid.as_str())
             .fetch_optional(&self.0)
             .await
@@ -275,7 +280,7 @@ impl Store for SqliteStore {
 
     async fn take_pending(&self, rid: &EndpointId) -> Result<Option<PendingRegistration>, Error> {
         // One statement: two concurrent confirms can't both get the row.
-        sqlx::query("DELETE FROM pending_registrations WHERE rid = ? RETURNING *")
+        sqlx::query("DELETE FROM pending_registrations WHERE rid = $1 RETURNING *")
             .bind(rid.as_str())
             .fetch_optional(&self.0)
             .await
@@ -294,9 +299,9 @@ impl Store for SqliteStore {
     ) -> Result<Option<IdempotencyState>, Error> {
         // Inserts, or takes over an expired claim, atomically; a live claim leaves 0 rows changed.
         let claimed = sqlx::query(
-            "INSERT INTO idempotency (endpoint, key, delivered, expires_at) VALUES (?, ?, 0, ?)
+            "INSERT INTO idempotency (endpoint, key, delivered, expires_at) VALUES ($1, $2, 0, $3)
              ON CONFLICT (endpoint, key) DO UPDATE SET delivered = 0, expires_at = excluded.expires_at
-             WHERE idempotency.expires_at <= ?",
+             WHERE idempotency.expires_at <= $4",
         )
         .bind(id.as_str())
         .bind(key)
@@ -310,13 +315,14 @@ impl Store for SqliteStore {
         if claimed {
             return Ok(None);
         }
-        let delivered: Option<i64> =
-            sqlx::query_scalar("SELECT delivered FROM idempotency WHERE endpoint = ? AND key = ?")
-                .bind(id.as_str())
-                .bind(key)
-                .fetch_optional(&self.0)
-                .await
-                .map_err(db_error)?;
+        let delivered: Option<i64> = sqlx::query_scalar(
+            "SELECT delivered FROM idempotency WHERE endpoint = $1 AND key = $2",
+        )
+        .bind(id.as_str())
+        .bind(key)
+        .fetch_optional(&self.0)
+        .await
+        .map_err(db_error)?;
         Ok(Some(match delivered {
             Some(1) => IdempotencyState::Delivered,
             // Released between our statements: treat as in flight, the sender retries in 1 s.
@@ -331,9 +337,9 @@ impl Store for SqliteStore {
         delivered: bool,
     ) -> Result<(), Error> {
         let sql = if delivered {
-            "UPDATE idempotency SET delivered = 1 WHERE endpoint = ? AND key = ?"
+            "UPDATE idempotency SET delivered = 1 WHERE endpoint = $1 AND key = $2"
         } else {
-            "DELETE FROM idempotency WHERE endpoint = ? AND key = ?"
+            "DELETE FROM idempotency WHERE endpoint = $1 AND key = $2"
         };
         sqlx::query(sql)
             .bind(id.as_str())
@@ -345,15 +351,82 @@ impl Store for SqliteStore {
     }
 }
 
-/// Deletes expired pending registrations and idempotency claims.
-pub async fn purge_expired(pool: &SqlitePool, now: u64) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM pending_registrations WHERE expires_at <= ?")
+/// Fixed-window counters shared by every instance on the same PostgreSQL database. One upsert
+/// per check: the row lock serializes concurrent checks of a bucket, so instances agree exactly.
+pub struct SqlRateLimiter(pub AnyPool);
+
+impl RateLimiter for SqlRateLimiter {
+    async fn acquire(
+        &self,
+        bucket: &str,
+        limit: u32,
+        window_secs: u64,
+        now: u64,
+    ) -> Result<(), Error> {
+        let row = sqlx::query(
+            "INSERT INTO rate_limits (bucket, window_end, count) VALUES ($1, $2 + $3, 1)
+             ON CONFLICT (bucket) DO UPDATE SET
+                 window_end = CASE WHEN rate_limits.window_end <= $2 THEN $2 + $3 ELSE rate_limits.window_end END,
+                 count = CASE WHEN rate_limits.window_end <= $2 THEN 1 ELSE rate_limits.count + 1 END
+             RETURNING window_end, count",
+        )
+        .bind(bucket)
         .bind(now as i64)
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM idempotency WHERE expires_at <= ?")
-        .bind(now as i64)
-        .execute(pool)
-        .await?;
+        .bind(window_secs as i64)
+        .fetch_one(&self.0)
+        .await
+        .map_err(db_error)?;
+        let window_end: i64 = row.try_get("window_end").map_err(db_error)?;
+        let count: i64 = row.try_get("count").map_err(db_error)?;
+        // Rejected checks count too; harmless, the window resets all the same.
+        if count > i64::from(limit) {
+            return Err(Error::RateLimited {
+                retry_after: (window_end as u64).saturating_sub(now),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// In memory for SQLite (one instance), in the database for PostgreSQL (many instances).
+pub enum NativeRateLimiter {
+    Memory(MemoryRateLimiter),
+    Shared(SqlRateLimiter),
+}
+
+impl RateLimiter for NativeRateLimiter {
+    async fn acquire(
+        &self,
+        bucket: &str,
+        limit: u32,
+        window_secs: u64,
+        now: u64,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Memory(l) => l.acquire(bucket, limit, window_secs, now).await,
+            Self::Shared(l) => l.acquire(bucket, limit, window_secs, now).await,
+        }
+    }
+}
+
+/// Deletes expired pending registrations, idempotency claims and (PostgreSQL) rate-limit rows.
+pub async fn purge_expired(
+    pool: &AnyPool,
+    shared_limits: bool,
+    now: u64,
+) -> Result<(), sqlx::Error> {
+    let mut statements = vec![
+        "DELETE FROM pending_registrations WHERE expires_at <= $1",
+        "DELETE FROM idempotency WHERE expires_at <= $1",
+    ];
+    if shared_limits {
+        statements.push("DELETE FROM rate_limits WHERE window_end <= $1");
+    }
+    for statement in statements {
+        sqlx::query(statement)
+            .bind(now as i64)
+            .execute(pool)
+            .await?;
+    }
     Ok(())
 }

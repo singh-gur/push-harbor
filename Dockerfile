@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
-# Pushharbor native relay (SQLite). Build: docker build -t pushharbor-native .
+# Pushharbor native relay (SQLite or PostgreSQL). Build: docker build -t pushharbor-native .
 # Run:   docker run -p 8080:8080 -v pushharbor-data:/data \
 #          -e PUSHHARBOR_ORIGIN=https://push.example.com \
 #          -e PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE=/run/secrets/fcm.json \
 #          -v ./service-account.json:/run/secrets/fcm.json:ro pushharbor-native
+# Several instances / no persistent disk: -e PUSHHARBOR_DATABASE_URL=postgres://user:pass@host/db
 
 FROM rust:1.98-slim-trixie AS build
 WORKDIR /src

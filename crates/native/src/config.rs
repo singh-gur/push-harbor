@@ -11,7 +11,7 @@ pub struct Config {
     /// Public origin (`https://push.example.com`): VAPID `aud` and the base of endpoint URLs.
     pub origin: String,
     pub listen: SocketAddr,
-    /// sqlx SQLite URL, e.g. `sqlite:///data/pushharbor.db`.
+    /// `sqlite://<path>` or `postgres://...`.
     pub database_url: String,
     pub fcm: ServiceAccount,
     pub provider_timeout: Duration,
@@ -28,7 +28,9 @@ pushharbor-native: Web Push relay (FCM). Configure with environment variables:
   PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE   path to the Firebase service-account JSON (or:)
   PUSHHARBOR_FCM_SERVICE_ACCOUNT        the service-account JSON itself
   PUSHHARBOR_LISTEN                     listen address (default 0.0.0.0:8080)
-  PUSHHARBOR_DATABASE_URL               SQLite URL (default sqlite:///data/pushharbor.db)
+  PUSHHARBOR_DATABASE_URL               sqlite://<path> (one instance; default
+                                        sqlite:///data/pushharbor.db) or postgres://... (any
+                                        number of instances: limits and idempotency are shared)
   PUSHHARBOR_PROVIDER_TIMEOUT_SECS      FCM request timeout (default 10)
   PUSHHARBOR_TRUST_PROXY                true: client IP from X-Forwarded-For (default false)
   PUSHHARBOR_LIMIT_<NAME>               <limit>/<window seconds>, NAME one of GLOBAL, PER_IP,
