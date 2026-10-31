@@ -139,6 +139,40 @@ interop relay="native" libs="node,python,go,php": interop-setup
       scripts/with-native.sh https://127.0.0.1 "sqlite://$(mktemp -d)/pushharbor.db" "$(mktemp)" $test
     fi
 
+# Smoke test of deploy/compose: the image built from this tree, Caddy in front, the full
+# conformance suite, the log check, and SQLite surviving a container restart
+deploy-test-compose:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker build -q -t pushharbor-native:dev . >/dev/null
+    export FCM_SERVICE_ACCOUNT_FILE=$PWD/crates/conformance/fixtures/service-account.json PUSHHARBOR_DOMAIN=localhost:8443
+    compose="docker compose -p ph-compose-test -f deploy/compose/docker-compose.yml -f deploy/compose/test.yml"
+    $compose up -d --quiet-pull
+    trap "$compose down -v >/dev/null 2>&1" EXIT
+    for _ in $(seq 60); do curl -sf http://127.0.0.1:8080/v1/health >/dev/null && break; sleep 0.5; done
+    for _ in $(seq 60); do curl -skf https://localhost:8443/v1/health >/dev/null && break; sleep 0.5; done
+    curl -skf https://localhost:8443/v1/health && echo " <- through Caddy (TLS)"
+    rm -f {{secrets}}
+    CONFORMANCE_SECRETS={{secrets}} RELAY_URL=http://127.0.0.1:8080 RELAY_REQUEST_TIMEOUT_SECS=8 \
+      cargo test -q -p pushharbor-conformance --test conformance
+    auth="Authorization: Bearer conformance-admin-token-not-a-secret-0123456789"
+    before=$(curl -sf -H "$auth" http://127.0.0.1:8080/v1/admin/export | wc -l)
+    $compose restart relay >/dev/null
+    for _ in $(seq 60); do curl -sf http://127.0.0.1:8080/v1/health >/dev/null && break; sleep 0.5; done
+    after=$(curl -sf -H "$auth" http://127.0.0.1:8080/v1/admin/export | wc -l)
+    echo "registrations before/after restart: $((before - 1))/$((after - 1))"
+    [ "$before" -gt 1 ] && [ "$before" = "$after" ]
+    log=$(mktemp); $compose logs --no-color relay caddy > "$log"
+    CONFORMANCE_SECRETS={{secrets}} RELAY_LOG=$log cargo test -q -p pushharbor-conformance --test logs
+
+# Smoke test of deploy/helm/pushharbor in a local kind cluster (PostgreSQL, two replicas)
+deploy-test-helm:
+    scripts/deploy-test-helm.sh
+
+# Local emulation of deploy/cloudrun (Cloud SQL socket, mounted secret, no disk) + the suite
+deploy-test-cloudrun:
+    scripts/deploy-test-cloudrun.sh
+
 # Run the native server
 run-native *args:
     cargo run -p pushharbor-native -- {{args}}

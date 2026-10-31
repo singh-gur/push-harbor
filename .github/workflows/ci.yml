@@ -97,3 +97,25 @@ jobs:
         with:
           tool: just
       - run: just test-expo
+
+  # Reference deployments (PH-14), each smoke-tested with the conformance suite.
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [compose, helm, cloudrun]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - if: matrix.target == 'helm'
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - if: matrix.target == 'helm'
+        uses: azure/setup-helm@v5
+      - run: just deploy-test-${{ matrix.target }}

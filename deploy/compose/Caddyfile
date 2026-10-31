@@ -1,0 +1,19 @@
+# TLS for the relay's origin. The timeouts protect the relay from slow clients (it has no
+# header-read timeout of its own, see PH-24).
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			idle 2m
+		}
+	}
+}
+
+{$PUSHHARBOR_DOMAIN} {
+	reverse_proxy {$PUSHHARBOR_UPSTREAM:relay:8080} {
+		health_uri /v1/health
+	}
+	# Request logs would contain endpoint IDs (capabilities): Caddy logs nothing per request
+	# unless a `log` directive is added here.
+}

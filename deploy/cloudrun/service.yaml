@@ -1,0 +1,62 @@
+# Pushharbor on Cloud Run with Cloud SQL for PostgreSQL. Setup: docs/deploy.md#cloud-run
+#   gcloud run services replace deploy/cloudrun/service.yaml --region REGION
+# Replace PROJECT, REGION, INSTANCE, the origin and the version. Instances scale out freely:
+# rate limits and idempotency live in PostgreSQL.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: pushharbor
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: PROJECT:REGION:INSTANCE
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        # Public GHCR images can be deployed directly; Google recommends mirroring them through
+        # an Artifact Registry remote repository.
+        - image: ghcr.io/singh-gur/pushharbor-native:0.1.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PUSHHARBOR_ORIGIN
+              value: https://push.example.com
+            # Cloud Run puts the client address in X-Forwarded-For (one hop). Behind an external
+            # Application Load Balancer use 2 (client, then the load balancer).
+            - name: PUSHHARBOR_TRUST_PROXY
+              value: "1"
+            - name: PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE
+              value: /secrets/fcm/service-account.json
+            # postgres://USER:PASSWORD@localhost/DB?host=/cloudsql/PROJECT:REGION:INSTANCE
+            - name: PUSHHARBOR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pushharbor-database-url
+                  key: latest
+          volumeMounts:
+            - name: fcm
+              mountPath: /secrets/fcm
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /v1/health
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+            periodSeconds: 30
+          resources:
+            limits:
+              cpu: "1"
+              memory: 256Mi
+      volumes:
+        - name: fcm
+          secret:
+            secretName: pushharbor-fcm-service-account
+            items:
+              - key: latest
+                path: service-account.json

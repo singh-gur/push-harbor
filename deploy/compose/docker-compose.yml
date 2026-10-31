@@ -1,0 +1,42 @@
+# Pushharbor native relay with SQLite on a persistent volume, behind Caddy (automatic HTTPS).
+# Single instance. Setup: docs/deploy.md#docker-compose
+#   PUSHHARBOR_DOMAIN=push.example.com docker compose up -d
+services:
+  relay:
+    image: ghcr.io/singh-gur/pushharbor-native:${PUSHHARBOR_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      PUSHHARBOR_ORIGIN: https://${PUSHHARBOR_DOMAIN:?set PUSHHARBOR_DOMAIN}
+      PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE: /run/secrets/fcm-service-account.json
+      # Caddy appends the client address to X-Forwarded-For.
+      PUSHHARBOR_TRUST_PROXY: "1"
+    volumes:
+      - data:/data
+      - type: bind
+        source: ${FCM_SERVICE_ACCOUNT_FILE:-./service-account.json}
+        target: /run/secrets/fcm-service-account.json
+        read_only: true
+        bind:
+          selinux: z
+    healthcheck:
+      # Distroless has no shell or curl; Caddy's health check and the relay's own exit cover it.
+      disable: true
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUSHHARBOR_DOMAIN: ${PUSHHARBOR_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro,z
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [relay]
+
+volumes:
+  data:
+  caddy-data:
+  caddy-config:

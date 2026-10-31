@@ -98,9 +98,12 @@ pub fn fake_fcm() -> &'static FakeFcm {
                     .route("/token", post(token))
                     .route("/v1/projects/{project}/messages:send", post(messages_send))
                     .with_state(state);
-                let listener = tokio::net::TcpListener::bind(FAKE_FCM_ADDR)
+                // `FAKE_FCM_LISTEN=0.0.0.0:9790` lets relays in containers or clusters reach it.
+                let address =
+                    std::env::var("FAKE_FCM_LISTEN").unwrap_or_else(|_| FAKE_FCM_ADDR.into());
+                let listener = tokio::net::TcpListener::bind(&address)
                     .await
-                    .unwrap_or_else(|e| panic!("fake FCM can't listen on {FAKE_FCM_ADDR}: {e}"));
+                    .unwrap_or_else(|e| panic!("fake FCM can't listen on {address}: {e}"));
                 ready_tx.send(()).unwrap();
                 axum::serve(listener, app).await.unwrap();
             });

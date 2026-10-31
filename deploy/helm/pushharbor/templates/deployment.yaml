@@ -1,0 +1,79 @@
+{{- if not .Values.origin }}{{ fail "set origin, e.g. https://push.example.com" }}{{ end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "pushharbor.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {{- include "pushharbor.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "pushharbor.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: relay
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          env:
+            - name: PUSHHARBOR_ORIGIN
+              value: {{ .Values.origin | quote }}
+            - name: PUSHHARBOR_LISTEN
+              value: "0.0.0.0:8080"
+            - name: PUSHHARBOR_TRUST_PROXY
+              value: {{ .Values.trustedProxies | quote }}
+            - name: PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE
+              value: /run/secrets/pushharbor/{{ .Values.secretKeys.fcmServiceAccount }}
+            - name: PUSHHARBOR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.databaseUrl }}
+            - name: PUSHHARBOR_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: {{ .Values.secretKeys.adminToken }}
+                  optional: true
+            {{- if .Values.metrics.enabled }}
+            - name: PUSHHARBOR_METRICS_LISTEN
+              value: "0.0.0.0:{{ .Values.metrics.port }}"
+            {{- end }}
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 8080}
+            {{- if .Values.metrics.enabled }}
+            - {name: metrics, containerPort: {{ .Values.metrics.port }}}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /v1/health, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /v1/health, port: http}
+            periodSeconds: 15
+            failureThreshold: 4
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: secrets
+              mountPath: /run/secrets/pushharbor
+              readOnly: true
+      volumes:
+        - name: secrets
+          secret:
+            secretName: {{ .Values.existingSecret }}
+            items:
+              - key: {{ .Values.secretKeys.fcmServiceAccount }}
+                path: {{ .Values.secretKeys.fcmServiceAccount }}

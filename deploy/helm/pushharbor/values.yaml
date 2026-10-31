@@ -1,0 +1,56 @@
+# Pushharbor relay on Kubernetes with PostgreSQL (rate limits and idempotency are shared, so
+# replicas agree). Setup: docs/deploy.md#helm
+
+image:
+  repository: ghcr.io/singh-gur/pushharbor-native
+  tag: ""          # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# Public origin, e.g. https://push.example.com (also the VAPID audience senders use).
+origin: ""
+
+# Secrets are referenced, never put in values:
+#   kubectl create secret generic pushharbor \
+#     --from-file=fcm-service-account.json=service-account.json \
+#     --from-literal=database-url='postgres://user:pass@host:5432/pushharbor'
+#     [--from-literal=admin-token=...]   # only while moving deployments
+existingSecret: pushharbor
+secretKeys:
+  fcmServiceAccount: fcm-service-account.json
+  databaseUrl: database-url
+  adminToken: admin-token   # optional key
+
+# Number of proxies in front that append to X-Forwarded-For (ingress controller: 1).
+trustedProxies: 1
+
+# Extra environment, e.g. PUSHHARBOR_LIMIT_PER_ENDPOINT: "60/60".
+env: {}
+
+metrics:
+  # Prometheus /metrics on its own port, reachable inside the cluster only.
+  enabled: true
+  port: 9090
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""          # usually the host of `origin`
+  tls: []           # e.g. [{secretName: pushharbor-tls, hosts: [push.example.com]}]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: pushharbor
+description: Pushharbor Web Push relay (native, PostgreSQL), any number of replicas
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/singh-gur/push-harbor
