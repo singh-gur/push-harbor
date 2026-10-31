@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use pushharbor_core::Error;
+use pushharbor_core::export;
 use pushharbor_core::fcm::{Fcm, ServiceAccount};
 use pushharbor_core::registration::{ConfirmRequest, RegisterRequest, RekeyRequest, parse_json};
 use pushharbor_core::relay::{RateLimits, Relay, SendRequest};
@@ -25,11 +26,14 @@ use crate::adapters::{
 };
 
 /// Request bodies are at most 2,900 B (push) or small JSON; anything near this is abuse.
+/// Push bodies are at most 2,900 B and JSON requests small; imports get their own, larger limit.
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
+const MAX_IMPORT_BYTES: usize = 256 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct AppState {
     pub origin: String,
+    pub admin_token: Option<String>,
     pub limits: RateLimits,
     pub trust_proxy: bool,
     pub account: ServiceAccount,
@@ -87,6 +91,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/registrations", post(register))
         .route("/v1/registrations/{rid}/challenge", post(resend_challenge))
         .route("/v1/registrations/{rid}/confirm", post(confirm))
+        .route("/v1/admin/export", get(admin_export))
+        .route(
+            "/v1/admin/import",
+            post(admin_import).layer(DefaultBodyLimit::max(MAX_IMPORT_BYTES)),
+        )
         .layer(middleware::from_fn(log_request))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(TimeoutLayer::with_status_code(
@@ -206,6 +215,49 @@ async fn confirm(
     let request: ConfirmRequest = parse_json(&body)?;
     let subscription = state.relay().confirm(&rid, &request, now()).await?;
     Ok((StatusCode::CREATED, Json(subscription)))
+}
+
+async fn admin_export(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> ApiResult<impl IntoResponse> {
+    export::authorize_admin(
+        header(&headers, "authorization"),
+        state.admin_token.as_deref(),
+    )?;
+    let file = export::export(&state.store, &state.origin, now()).await?;
+    Ok(([("content-type", "application/x-ndjson")], file))
+}
+
+async fn admin_import(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let authorized = export::authorize_admin(
+        header(&headers, "authorization"),
+        state.admin_token.as_deref(),
+    );
+    if let Err(e) = authorized {
+        return ApiError(e).into_response();
+    }
+    let Ok(file) = std::str::from_utf8(&body) else {
+        return ApiError(Error::BadRequest("export files are UTF-8")).into_response();
+    };
+    import_response(export::import(&state.store, &state.origin, file).await)
+}
+
+/// `{"imported": n}`, or 400 with the offending line (spec: export.md).
+pub fn import_response(result: Result<usize, export::ImportError>) -> Response {
+    match result {
+        Ok(imported) => Json(json!({"imported": imported})).into_response(),
+        Err(export::ImportError::Invalid { line, reason }) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "bad_request", "message": reason, "line": line})),
+        )
+            .into_response(),
+        Err(export::ImportError::Store(e)) => ApiError(e).into_response(),
+    }
 }
 
 async fn log_request(request: Request, next: Next) -> Response {

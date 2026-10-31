@@ -48,6 +48,13 @@ pub trait Store {
     /// Insert or replace.
     async fn put(&self, registration: &Registration) -> Result<(), Error>;
     async fn delete(&self, id: &EndpointId) -> Result<(), Error>;
+    /// Up to `limit` registrations with endpoint IDs greater than `after`, in endpoint-ID order
+    /// (export pages through all of them).
+    async fn list(
+        &self,
+        after: Option<&EndpointId>,
+        limit: u32,
+    ) -> Result<Vec<Registration>, Error>;
 
     /// Insert or replace a pending registration (expired ones may be purged by the adapter).
     async fn put_pending(&self, pending: &PendingRegistration) -> Result<(), Error>;

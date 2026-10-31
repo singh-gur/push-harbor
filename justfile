@@ -81,6 +81,25 @@ conformance-worker:
     log=$(mktemp)
     scripts/with-worker.sh http://127.0.0.1:8787 "$log" just conformance http://127.0.0.1:8787 "$log"
 
+# Moving between hosting options (PH-23): Workers -> native SQLite -> native PostgreSQL ->
+# Workers via export/import, all three relays running with one origin (Docker for PostgreSQL)
+conformance-migration:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker rm -f ph-postgres >/dev/null 2>&1 || true
+    docker run -d --rm --name ph-postgres -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql \
+      -e POSTGRES_PASSWORD=pushharbor -e POSTGRES_DB=pushharbor postgres:17-alpine >/dev/null
+    trap 'docker rm -f ph-postgres >/dev/null 2>&1 || true' EXIT
+    for _ in $(seq 60); do docker exec ph-postgres pg_isready -q -U postgres -d pushharbor && break; sleep 0.5; done
+    origin=http://127.0.0.1:8080
+    scripts/with-native.sh $origin "sqlite://$(mktemp -d)/pushharbor.db" "$(mktemp)" \
+      env PUSHHARBOR_LISTEN=127.0.0.1:8081 scripts/with-native.sh $origin \
+        postgres://postgres:pushharbor@127.0.0.1:55432/pushharbor "$(mktemp)" \
+      scripts/with-worker.sh $origin "$(mktemp)" \
+      env MIGRATION_ORIGIN=$origin CONFORMANCE_SECRETS={{secrets}} \
+        MIGRATION_RELAYS=worker=http://127.0.0.1:8787,sqlite=http://127.0.0.1:8080,postgres=http://127.0.0.1:8081 \
+        cargo test -p pushharbor-conformance --test migration -- --nocapture
+
 # Install the interop senders' dependencies (needs node, go, docker; python runs via uv)
 interop-setup:
     cd interop/node && npm ci --silent

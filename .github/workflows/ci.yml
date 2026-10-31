@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [native, postgres, worker]
+        config: [native, postgres, worker, migration]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -41,7 +41,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just,cargo-binstall
-      - if: matrix.config == 'worker'
+      - if: matrix.config == 'worker' || matrix.config == 'migration'
         run: |
           rustup target add wasm32-unknown-unknown
           cargo binstall -y --locked worker-build@0.8.7

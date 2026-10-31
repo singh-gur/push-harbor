@@ -5,6 +5,7 @@
 
 pub mod adapter;
 pub mod error;
+pub mod export;
 #[cfg(any(test, feature = "fakes"))]
 pub mod fakes;
 pub mod fcm;

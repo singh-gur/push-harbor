@@ -14,6 +14,7 @@ npm ci --silent
   echo "PUSHHARBOR_FCM_SERVICE_ACCOUNT='$(tr -d '\n' < ../conformance/fixtures/service-account.json)'"
   echo "PUSHHARBOR_FCM_API_BASE=http://127.0.0.1:9790"
   echo "PUSHHARBOR_PROVIDER_TIMEOUT_SECS=5"
+  echo "PUSHHARBOR_ADMIN_TOKEN=conformance-admin-token-not-a-secret-0123456789"
   echo "PUSHHARBOR_LIMIT_GLOBAL=1000000/60"
   echo "PUSHHARBOR_LIMIT_PER_IP=1000000/60"
   echo "PUSHHARBOR_LIMIT_PER_SENDER=10/60"

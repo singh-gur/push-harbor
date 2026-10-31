@@ -88,6 +88,23 @@ impl Store for MemoryStore {
         Ok(())
     }
 
+    async fn list(
+        &self,
+        after: Option<&EndpointId>,
+        limit: u32,
+    ) -> Result<Vec<Registration>, Error> {
+        let mut all: Vec<Registration> = self
+            .registrations
+            .borrow()
+            .values()
+            .filter(|r| after.is_none_or(|a| r.endpoint.as_str() > a.as_str()))
+            .cloned()
+            .collect();
+        all.sort_by(|a, b| a.endpoint.as_str().cmp(b.endpoint.as_str()));
+        all.truncate(limit as usize);
+        Ok(all)
+    }
+
     async fn put_pending(&self, pending: &PendingRegistration) -> Result<(), Error> {
         self.pending
             .borrow_mut()

@@ -245,6 +245,22 @@ impl Store for SqlStore {
         Ok(())
     }
 
+    async fn list(
+        &self,
+        after: Option<&EndpointId>,
+        limit: u32,
+    ) -> Result<Vec<Registration>, Error> {
+        sqlx::query("SELECT * FROM registrations WHERE endpoint > $1 ORDER BY endpoint LIMIT $2")
+            .bind(after.map_or("", EndpointId::as_str))
+            .bind(i64::from(limit))
+            .fetch_all(&self.0)
+            .await
+            .map_err(db_error)?
+            .iter()
+            .map(registration)
+            .collect()
+    }
+
     async fn put_pending(&self, p: &PendingRegistration) -> Result<(), Error> {
         sqlx::query(
             "INSERT INTO pending_registrations

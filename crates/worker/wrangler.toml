@@ -2,7 +2,8 @@
 #   npx wrangler secret put PUSHHARBOR_FCM_SERVICE_ACCOUNT < service-account.json
 #   npx wrangler deploy
 # Optional vars (same as native): PUSHHARBOR_LIMIT_<NAME> ("limit/window_secs"),
-# PUSHHARBOR_PROVIDER_TIMEOUT_SECS.
+# PUSHHARBOR_PROVIDER_TIMEOUT_SECS. Moving deployments: `wrangler secret put PUSHHARBOR_ADMIN_TOKEN`
+# enables /v1/admin/export and /v1/admin/import (docs/spec/export.md); delete it afterwards.
 name = "pushharbor"
 main = "build/index.js"
 compatibility_date = "2026-10-01"

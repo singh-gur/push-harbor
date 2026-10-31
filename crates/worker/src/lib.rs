@@ -9,7 +9,8 @@
 //!
 //! Configuration (wrangler vars, the service account as a secret), same names as native:
 //! `PUSHHARBOR_ORIGIN`, `PUSHHARBOR_FCM_SERVICE_ACCOUNT`, `PUSHHARBOR_LIMIT_<NAME>`,
-//! `PUSHHARBOR_PROVIDER_TIMEOUT_SECS`, `PUSHHARBOR_FCM_API_BASE` (tests only).
+//! `PUSHHARBOR_PROVIDER_TIMEOUT_SECS`, `PUSHHARBOR_ADMIN_TOKEN` (secret; enables
+//! `/v1/admin/export` and `/v1/admin/import`), `PUSHHARBOR_FCM_API_BASE` (tests only).
 
 #![cfg(target_arch = "wasm32")]
 
@@ -19,6 +20,7 @@ use std::cell::{Cell, OnceCell};
 use std::time::Duration;
 
 use pushharbor_core::Error;
+use pushharbor_core::export;
 use pushharbor_core::fcm::{self, Fcm, ServiceAccount};
 use pushharbor_core::registration::{ConfirmRequest, RegisterRequest, RekeyRequest, parse_json};
 use pushharbor_core::relay::{RateLimits, Relay, SendRequest};
@@ -37,8 +39,9 @@ use crate::adapters::{
 
 /// Set by the Worker from `CF-Connecting-IP`; the object is only reachable through the Worker.
 const CLIENT_IP: &str = "x-pushharbor-client-ip";
-/// Request bodies are at most 2,900 B (push) or small JSON; anything near this is abuse.
+/// Push bodies are at most 2,900 B and JSON requests small; imports get their own, larger limit.
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
+const MAX_IMPORT_BYTES: usize = 64 * 1024 * 1024;
 const PURGE_EVERY_SECS: u64 = 600;
 
 #[event(fetch)]
@@ -73,6 +76,7 @@ struct Config {
     limits: RateLimits,
     account: ServiceAccount,
     provider_timeout: Duration,
+    admin_token: Option<String>,
 }
 
 impl Config {
@@ -102,7 +106,20 @@ impl Config {
             })
             .transpose()?
             .unwrap_or(10);
+        let admin_token = env
+            .secret("PUSHHARBOR_ADMIN_TOKEN")
+            .map(|s| s.to_string())
+            .ok()
+            .or_else(|| var("PUSHHARBOR_ADMIN_TOKEN"))
+            .filter(|t| !t.is_empty());
+        if admin_token
+            .as_ref()
+            .is_some_and(|t| t.len() < export::MIN_ADMIN_TOKEN_LEN)
+        {
+            return Err("PUSHHARBOR_ADMIN_TOKEN must be at least 32 characters".into());
+        }
         Ok(Self {
+            admin_token,
             origin,
             limits: RateLimits::from_lookup(|name| var(&format!("PUSHHARBOR_LIMIT_{name}")))?,
             account,
@@ -154,7 +171,12 @@ impl DurableObject for RelayObject {
         }
 
         let body = req.bytes().await?;
-        if body.len() > MAX_REQUEST_BYTES {
+        let limit = if req.path() == "/v1/admin/import" {
+            MAX_IMPORT_BYTES
+        } else {
+            MAX_REQUEST_BYTES
+        };
+        if body.len() > limit {
             return error_response(&Error::PayloadTooLarge);
         }
         let (store, limiter, cache) = (DoStore(&sql), DoRateLimiter(&sql), DoTokenCache(&sql));
@@ -244,12 +266,57 @@ impl DurableObject for RelayObject {
                     Err(e) => Err(e),
                 }
             }
+            (Method::Get, ["v1", "admin", "export"]) => {
+                match export::authorize_admin(
+                    header("authorization").as_deref(),
+                    config.admin_token.as_deref(),
+                ) {
+                    Ok(()) => export::export(&store, &config.origin, now)
+                        .await
+                        .map(|file| {
+                            let response = Response::ok(file)?;
+                            response
+                                .headers()
+                                .set("Content-Type", "application/x-ndjson")?;
+                            Ok(response)
+                        }),
+                    Err(e) => Err(e),
+                }
+            }
+            (Method::Post, ["v1", "admin", "import"]) => {
+                match export::authorize_admin(
+                    header("authorization").as_deref(),
+                    config.admin_token.as_deref(),
+                ) {
+                    Ok(()) => match std::str::from_utf8(&body) {
+                        Ok(file) => {
+                            return import_response(
+                                export::import(&store, &config.origin, file).await,
+                            );
+                        }
+                        Err(_) => Err(Error::BadRequest("export files are UTF-8")),
+                    },
+                    Err(e) => Err(e),
+                }
+            }
             _ => Err(Error::NotFound),
         };
         match result {
             Ok(response) => response,
             Err(e) => error_response(&e),
         }
+    }
+}
+
+/// `{"imported": n}`, or 400 with the offending line (spec: export.md).
+fn import_response(result: std::result::Result<usize, export::ImportError>) -> Result<Response> {
+    match result {
+        Ok(imported) => json_response(&json!({"imported": imported}), 200),
+        Err(export::ImportError::Invalid { line, reason }) => json_response(
+            &json!({"error": "bad_request", "message": reason, "line": line}),
+            400,
+        ),
+        Err(export::ImportError::Store(e)) => error_response(&e),
     }
 }
 

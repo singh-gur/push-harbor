@@ -4,6 +4,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use pushharbor_core::export;
 use pushharbor_core::fcm::{self, ServiceAccount};
 use pushharbor_core::relay::RateLimits;
 
@@ -18,11 +19,19 @@ pub struct Config {
     pub limits: RateLimits,
     /// Take the client IP from `X-Forwarded-For` (only behind a trusted reverse proxy).
     pub trust_proxy: bool,
+    /// Enables the admin API (export/import) when set.
+    pub admin_token: Option<String>,
 }
 
 /// Documented in `--help` output and the deploy guide.
 pub const USAGE: &str = "\
-pushharbor-native: Web Push relay (FCM). Configure with environment variables:
+pushharbor-native: Web Push relay (FCM).
+
+Usage: pushharbor-native            serve
+       pushharbor-native export     write all registrations to stdout (docs/spec/export.md)
+       pushharbor-native import F   import registrations from file F (- for stdin)
+
+Configure with environment variables:
 
   PUSHHARBOR_ORIGIN                     public origin, e.g. https://push.example.com (required)
   PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE   path to the Firebase service-account JSON (or:)
@@ -36,6 +45,8 @@ pushharbor-native: Web Push relay (FCM). Configure with environment variables:
   PUSHHARBOR_LIMIT_<NAME>               <limit>/<window seconds>, NAME one of GLOBAL, PER_IP,
                                         PER_SENDER, PER_ENDPOINT, REGISTRATIONS_PER_IP,
                                         CHALLENGES_PER_TARGET
+  PUSHHARBOR_ADMIN_TOKEN                enables GET /v1/admin/export and POST /v1/admin/import
+                                        (Authorization: Bearer <token>, >= 32 characters)
   PUSHHARBOR_FCM_API_BASE               FCM API origin override (tests only)
   RUST_LOG                              log filter (default info)
 ";
@@ -94,6 +105,12 @@ impl Config {
                     .unwrap_or(10),
             ),
             limits,
+            admin_token: match var("PUSHHARBOR_ADMIN_TOKEN") {
+                Some(t) if t.len() < export::MIN_ADMIN_TOKEN_LEN => {
+                    return Err("PUSHHARBOR_ADMIN_TOKEN must be at least 32 characters".into());
+                }
+                token => token,
+            },
             trust_proxy: var("PUSHHARBOR_TRUST_PROXY").is_some_and(|v| v == "true" || v == "1"),
         })
     }

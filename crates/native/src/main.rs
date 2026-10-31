@@ -18,12 +18,14 @@ use crate::adapters::{
 };
 use crate::config::{Config, USAGE};
 use crate::server::{AppState, router};
+use pushharbor_core::export;
 
 const PURGE_EVERY: Duration = Duration::from_secs(600);
 
 #[tokio::main]
 async fn main() {
-    if std::env::args().any(|a| a == "--help" || a == "-h") {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}");
         return;
     }
@@ -69,8 +71,40 @@ async fn main() {
         NativeRateLimiter::Memory(MemoryRateLimiter::default())
     };
 
+    match args.first().map(String::as_str) {
+        None | Some("serve") => {}
+        Some("export") => {
+            let file = export::export(&SqlStore(pool), &config.origin, now())
+                .await
+                .unwrap_or_else(|e| fail(&format!("export failed: {}", e.code())));
+            print!("{file}");
+            return;
+        }
+        Some("import") => {
+            let file = match args.get(1).map(String::as_str) {
+                Some("-") => std::io::read_to_string(std::io::stdin()),
+                Some(path) => std::fs::read_to_string(path),
+                None => fail("usage: pushharbor-native import <file|->"),
+            }
+            .unwrap_or_else(|e| fail(&format!("can't read the export file: {e}")));
+            match export::import(&SqlStore(pool), &config.origin, &file).await {
+                Ok(n) => println!("imported {n} registrations"),
+                Err(export::ImportError::Invalid { line, reason }) => {
+                    fail(&format!("line {line}: {reason}; nothing imported"))
+                }
+                Err(export::ImportError::Store(e)) => fail(&format!(
+                    "import failed part-way ({}); importing the same file again is safe",
+                    e.code()
+                )),
+            }
+            return;
+        }
+        Some(other) => fail(&format!("unknown command {other}; see --help")),
+    }
+
     let state = Arc::new(AppState {
         origin: config.origin.clone(),
+        admin_token: config.admin_token.clone(),
         limits: config.limits,
         trust_proxy: config.trust_proxy,
         account: config.fcm,

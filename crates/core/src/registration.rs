@@ -259,14 +259,14 @@ impl<S: Store, L: RateLimiter, C: Crypto, H: HttpClient, T: TokenCache> Relay<'_
 }
 
 /// FCM FIDs are 22 characters, APNs tokens 64 hex; anything printable without spaces up to 256.
-fn parse_target(target: &str) -> Result<&str, Error> {
+pub(crate) fn parse_target(target: &str) -> Result<&str, Error> {
     let valid = (1..=256).contains(&target.len()) && target.bytes().all(|b| b.is_ascii_graphic());
     valid.then_some(target).ok_or(Error::BadRequest(
         "target must be 1-256 printable characters",
     ))
 }
 
-fn parse_public_key(value: &str) -> Result<PublicKey, Error> {
+pub(crate) fn parse_public_key(value: &str) -> Result<PublicKey, Error> {
     URL_SAFE_NO_PAD
         .decode(value.trim_end_matches('='))
         .ok()
@@ -277,7 +277,7 @@ fn parse_public_key(value: &str) -> Result<PublicKey, Error> {
         ))
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 

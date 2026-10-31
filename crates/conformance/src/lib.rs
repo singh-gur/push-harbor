@@ -10,6 +10,7 @@
 //! - origin (VAPID `aud`) = `RELAY_URL`;
 //! - FCM service account = [`SERVICE_ACCOUNT_JSON`] and FCM API base = `http://` + [`FAKE_FCM_ADDR`];
 //! - rate limits = [`LIMITS`], provider request timeout <= [`MAX_PROVIDER_TIMEOUT_SECS`];
+//! - admin token = [`ADMIN_TOKEN`] (export/import API);
 //! - its logs written to a file named in `RELAY_LOG` if the log check should run.
 
 use std::collections::HashMap;
@@ -24,6 +25,9 @@ use axum::{Json, Router};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 use serde_json::{Value, json};
+
+/// `PUSHHARBOR_ADMIN_TOKEN` of the relay under test.
+pub const ADMIN_TOKEN: &str = "conformance-admin-token-not-a-secret-0123456789";
 
 /// Where the fake FCM listens; the relay's FCM API base must point here.
 pub const FAKE_FCM_ADDR: &str = "127.0.0.1:9790";
@@ -365,6 +369,27 @@ impl Relay {
         }
     }
 
+    /// `GET /v1/admin/export` with the given bearer token.
+    pub async fn export(&self, token: &str) -> reqwest::Response {
+        self.http
+            .get(format!("{}/v1/admin/export", self.base))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap()
+    }
+
+    /// `POST /v1/admin/import` of `file` with the given bearer token.
+    pub async fn import(&self, token: &str, file: String) -> reqwest::Response {
+        self.http
+            .post(format!("{}/v1/admin/import", self.base))
+            .bearer_auth(token)
+            .body(file)
+            .send()
+            .await
+            .unwrap()
+    }
+
     /// Web Push send with the given `Authorization` and extra headers.
     pub async fn push(
         &self,
@@ -397,8 +422,13 @@ impl Relay {
 
     /// Push signed by `sender` with a fresh small body.
     pub async fn push_as(&self, sub: &Subscription, sender: &SigningKey) -> reqwest::Response {
+        self.push_as_to(&sub.endpoint, sender).await
+    }
+
+    /// Push to an endpoint URL signed by `sender` (VAPID `aud` = this relay's base).
+    pub async fn push_as_to(&self, endpoint: &str, sender: &SigningKey) -> reqwest::Response {
         self.push(
-            &sub.endpoint,
+            endpoint,
             Some(&vapid_header(sender, &self.base)),
             &aes128gcm_body(200),
             &[],

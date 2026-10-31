@@ -49,11 +49,40 @@ limit counters and provider access tokens; all are short-lived.
 - The new deployment MUST use the **same Firebase project**: FIDs belong to one project.
 - Registrations created on the old deployment after the export are lost; freeze registrations
   (or export again just before switching) to avoid that.
+- An import overwrites registrations with the same `id` with the file's state; changes made on
+  the destination after the export (rekey, target rotation) are reverted for those IDs.
+
+## Admin API
+
+Every hosting option serves the same two endpoints, **only when an admin token is configured**
+(`PUSHHARBOR_ADMIN_TOKEN`, at least 32 characters; on Workers a secret). Without it they answer
+404; with a missing or wrong `Authorization: Bearer <token>`, 403.
+
+| Request | Response |
+|---|---|
+| `GET /v1/admin/export` | 200, `Content-Type: application/x-ndjson`, the file above |
+| `POST /v1/admin/import` (body: the file) | 200 `{"imported": n}`; 400 `{"error": "bad_request", "message": ..., "line": n}` with nothing imported |
+
+The native server also has CLI subcommands that work on its database directly, with the same
+environment as the server: `pushharbor-native export > file` and `pushharbor-native import
+file` (`-` for stdin).
+
+## Moving a deployment
+
+1. Deploy the destination with the **same origin** (not yet receiving traffic, e.g. reached
+   through another hostname or locally), the **same Firebase project** and an admin token.
+2. Export from the source (admin API or `pushharbor-native export`) and import into the
+   destination. Check the import's `imported` count against the export's line count minus 1.
+3. Point the origin's DNS (or route) at the destination.
+4. Export from the source once more and import it, to catch registrations made during the
+   switch. Then retire the source and delete the export files.
+
+On the Workers free plan (10 ms CPU per request) split a large import into several files, each
+with the header line and a few hundred registrations; importing is an upsert, so the parts can
+be sent in any order or again.
 
 ## Handling
 
 An export contains every endpoint ID, which are capabilities, and every device's provider
-target. Store and transfer it like a credential and delete it after the import.
-
-The export and import commands are implemented with the hosting options (PH-23); this document
-fixes the format they use.
+target. Store and transfer it like a credential and delete it after the import. Keep the admin
+token unset when no migration is in progress.

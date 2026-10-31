@@ -430,5 +430,87 @@ async fn server_rekey() {
 }
 
 #[tokio::test]
-#[ignore = "export/import arrives with PH-23"]
-async fn export_import_round_trip() {}
+async fn export_import_round_trip() {
+    let r = relay!();
+    record_secret(ADMIN_TOKEN);
+    let sender = new_sender();
+    let sub = r.subscribe(&sender, &fid("ok")).await;
+
+    // The admin API needs the token.
+    assert_eq!(r.export("wrong-token").await.status(), 403);
+    let response = r
+        .http
+        .get(format!("{}/v1/admin/export", r.base))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 403);
+
+    let response = r.export(ADMIN_TOKEN).await;
+    assert_eq!(response.status(), 200);
+    let file = response.text().await.unwrap();
+    let mut lines = file.lines();
+    let header: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+    assert_eq!(header["format"], "pushharbor-registrations");
+    assert_eq!(header["version"], 1);
+    assert_eq!(header["origin"], r.base.as_str());
+    let line: Value = lines
+        .map(|l| serde_json::from_str::<Value>(l).unwrap())
+        .find(|l| l["id"] == sub.id.as_str())
+        .expect("subscription exported");
+    assert_eq!(line["platform"], "fcm");
+    assert_eq!(line["target"], sub.fid.as_str());
+    assert_eq!(line["key_id"], "k1");
+    assert_eq!(line["sender_key"], public_key_b64(&sender).as_str());
+    let header = file.lines().next().unwrap().to_owned();
+
+    // A registration created only by import works like any other.
+    let new_id = URL_SAFE_NO_PAD.encode(random_bytes::<16>());
+    let new_fid = fid("ok");
+    record_secret(&new_id);
+    let new_line = json!({"id": new_id, "platform": "fcm", "target": new_fid, "key_id": "k2",
+        "sender_key": public_key_b64(&sender), "created_at": now()})
+    .to_string();
+    let endpoint = format!("{}/v1/push/{new_id}", r.base);
+
+    // Invalid files import nothing, and say which line is wrong.
+    let response = r
+        .import(ADMIN_TOKEN, format!("{header}\n{new_line}\nnot json\n"))
+        .await;
+    assert_eq!(response.status(), 400);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(
+        (body["error"].as_str(), body["line"].as_u64()),
+        (Some("bad_request"), Some(3))
+    );
+    assert_eq!(r.push_as_to(&endpoint, &sender).await.status(), 404);
+    let other_origin = header.replace(&r.base, "https://other.example");
+    let response = r
+        .import(ADMIN_TOKEN, format!("{other_origin}\n{new_line}\n"))
+        .await;
+    assert_eq!(response.status(), 400);
+    assert_eq!(
+        r.import("wrong-token", format!("{header}\n{new_line}\n"))
+            .await
+            .status(),
+        403
+    );
+
+    let response = r
+        .import(ADMIN_TOKEN, format!("{header}\n{new_line}\n"))
+        .await;
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.json::<Value>().await.unwrap()["imported"], 1);
+    assert_eq!(r.push_as_to(&endpoint, &sender).await.status(), 201);
+    let delivered = r.fcm.messages_for(&new_fid);
+    assert_eq!(delivered.last().unwrap()["data"]["s"], "k2");
+
+    // Re-importing an exported line is harmless; the endpoint keeps working. (Only this test's
+    // line: other tests run in parallel and an import overwrites with the exported state.)
+    let own_line = file.lines().find(|l| l.contains(&sub.id)).unwrap();
+    let response = r
+        .import(ADMIN_TOKEN, format!("{header}\n{own_line}\n"))
+        .await;
+    assert_eq!(response.status(), 200);
+    assert_eq!(r.push_as(&sub, &sender).await.status(), 201);
+}

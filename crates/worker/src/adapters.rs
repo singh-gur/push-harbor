@@ -202,6 +202,23 @@ impl Store for DoStore<'_> {
         )
     }
 
+    async fn list(
+        &self,
+        after: Option<&EndpointId>,
+        limit: u32,
+    ) -> Result<Vec<Registration>, Error> {
+        self.rows::<RegistrationRow>(
+            "SELECT * FROM registrations WHERE endpoint > ? ORDER BY endpoint LIMIT ?",
+            vec![
+                text(after.map_or("", EndpointId::as_str)),
+                int(u64::from(limit)),
+            ],
+        )?
+        .into_iter()
+        .map(RegistrationRow::into_model)
+        .collect()
+    }
+
     async fn put_pending(&self, p: &PendingRegistration) -> Result<(), Error> {
         self.run(
             "INSERT OR REPLACE INTO pending_registrations
