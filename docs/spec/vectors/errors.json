@@ -1,0 +1,27 @@
+{
+  "description": "Error responses (spec: errors.md). Every error has an HTTP status and a JSON body {\"error\": code} (bad_request adds \"message\"); retry_after says whether a Retry-After header (seconds) is sent. provider maps FCM HTTP v1 responses onto relay errors.",
+  "errors": [
+    { "code": "bad_request", "status": 400, "retry_after": "never" },
+    { "code": "unauthorized", "status": 401, "retry_after": "never" },
+    { "code": "forbidden", "status": 403, "retry_after": "never" },
+    { "code": "not_found", "status": 404, "retry_after": "never" },
+    { "code": "gone", "status": 410, "retry_after": "never" },
+    { "code": "payload_too_large", "status": 413, "retry_after": "never" },
+    { "code": "rate_limited", "status": 429, "retry_after": "always" },
+    { "code": "unavailable", "status": 503, "retry_after": "when known" },
+    { "code": "internal", "status": 500, "retry_after": "never" }
+  ],
+  "provider": [
+    { "name": "accepted", "fcm_status": 200, "expect": "ok" },
+    { "name": "device unregistered", "fcm_status": 404, "fcm_error": "UNREGISTERED", "expect": "gone" },
+    { "name": "unregistered reported as 400", "fcm_status": 400, "fcm_error": "UNREGISTERED", "expect": "gone" },
+    { "name": "FID belongs to another Firebase project", "fcm_status": 403, "fcm_error": "SENDER_ID_MISMATCH", "expect": "gone" },
+    { "name": "plain 404", "fcm_status": 404, "expect": "gone" },
+    { "name": "quota exceeded with Retry-After", "fcm_status": 429, "fcm_error": "QUOTA_EXCEEDED", "retry_after": "30", "expect": "rate_limited", "expect_retry_after": 30 },
+    { "name": "quota exceeded without Retry-After", "fcm_status": 429, "expect": "rate_limited", "expect_retry_after": 60 },
+    { "name": "FCM unavailable", "fcm_status": 503, "fcm_error": "UNAVAILABLE", "retry_after": "10", "expect": "unavailable", "expect_retry_after": 10 },
+    { "name": "FCM internal error", "fcm_status": 500, "fcm_error": "INTERNAL", "expect": "unavailable" },
+    { "name": "relay credentials rejected", "fcm_status": 401, "fcm_error": "THIRD_PARTY_AUTH_ERROR", "expect": "unavailable" },
+    { "name": "relay built a bad request (never blames the device)", "fcm_status": 400, "fcm_error": "INVALID_ARGUMENT", "expect": "internal" }
+  ]
+}

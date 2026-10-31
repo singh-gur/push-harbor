@@ -93,7 +93,16 @@
       "now": 1793375413,
       "expect": "ok",
       "sub": "mailto:survey@example.com"
+    },
+    {
+      "name": "valid token, endpoint bound to another key",
+      "authorization": "vapid t=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJodHRwczovL3JlbGF5LmV4YW1wbGUiLCJleHAiOjE3OTMzMzg1NzcsInN1YiI6Im1haWx0bzpvcHNAZXhhbXBsZS5jb20ifQ.k-npb4-ERF-wF3xIwu9kLlHVIizQOI9uHuj1gEyHkhxdOjlsqmeR5d-wDa-n0LdWyxOCHmIYFQ-e76HF5_5LCQ, k=BG4kV_wdOWn4UH9PnI0-IEaju8oyUbv6rQ-EhSAmQz8vDzBcrwu7u2lDsv0hx063ISllIUtYT-CZMONCW82SEUI",
+      "audience": "https://relay.example",
+      "now": 1793334977,
+      "expect": "Forbidden",
+      "bound_key": "BHl3jVHdi8feKkAEyecsvwP8pd081qJo6fihX4dC99wMl78M9b9-Z1RR4RRM-67FmH3qaY1zmFopZYReOl5j5Fw"
     }
   ],
-  "max_lifetime_secs": 86700
+  "max_lifetime_secs": 86700,
+  "notes": "expect is the verify() outcome: ok or a VapidError name. Vectors with bound_key are checked with authorize() against that bound key: Forbidden means a 403 before any signature work."
 }

@@ -24,7 +24,7 @@ impl Crypto for P256 {
 
 fn main() {
     let file: serde_json::Value =
-        serde_json::from_str(include_str!("../tests/vectors/vapid.json")).unwrap();
+        serde_json::from_str(include_str!("../../../docs/spec/vectors/vapid.json")).unwrap();
     let v = &file["vectors"][0];
     let (auth, aud) = (
         v["authorization"].as_str().unwrap(),

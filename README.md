@@ -9,6 +9,8 @@ Open-source, Web Push compatible push relay that lets self-hosted servers of an 
 - `crates/core` – protocol logic, no I/O (native + wasm32)
 - `crates/worker` – Cloudflare Workers + Durable Objects adapter
 - `crates/native` – axum/tokio server for containers (SQLite / PostgreSQL)
+- `crates/conformance` – black-box test suite every hosting option must pass
+- `docs/spec` – protocol specification v1 and test vectors
 
 Run `just` to list development tasks.
 
