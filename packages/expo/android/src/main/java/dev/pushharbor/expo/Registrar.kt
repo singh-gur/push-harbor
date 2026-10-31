@@ -35,9 +35,20 @@ object Registrar {
   /** Registrations this app started and has not finished: only these challenges are answered. */
   private val pending = ConcurrentHashMap<String, CompletableFuture<String>>()
 
+  /**
+   * Challenges whose rid isn't known yet: the push can arrive before the relay's 202 with the rid
+   * does. Kept briefly and used only if the rid then turns out to be one of ours.
+   */
+  private val early = ConcurrentHashMap<String, Pair<String, Long>>()
+  private const val EARLY_KEEP_MS = 60_000L
+
   /** Called by [PushService] for every challenge push. */
   fun onChallenge(rid: String, nonce: String) {
-    pending[rid]?.complete(nonce)
+    val answer = pending[rid]
+    if (answer != null) return run { answer.complete(nonce) }
+    val now = System.currentTimeMillis()
+    early.entries.removeIf { now - it.value.second > EARLY_KEEP_MS }
+    if (early.size < 16) early[rid] = nonce to now
   }
 
   /** The device's current FCM target (Firebase Installation ID). */
@@ -95,6 +106,7 @@ object Registrar {
     val rid = expect(http("POST", "$relay/v1/registrations", request), 202).getString("rid")
     val answer = CompletableFuture<String>()
     pending[rid] = answer
+    early.remove(rid)?.let { (nonce, _) -> answer.complete(nonce) }
     try {
       var sends = 1
       while (true) {
