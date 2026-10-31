@@ -18,6 +18,7 @@ kubectl rollout status deploy/postgres --timeout=180s >/dev/null
 # Pods reach the host (fake FCM) through the kind network's gateway.
 gateway=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' | tr ' ' '\n' | grep -m1 '\.')
 fcm=http://$gateway:9790
+mkdir -p target
 sed "s#http://127.0.0.1:9790#$fcm#" crates/conformance/fixtures/service-account.json > target/helm-sa.json
 kubectl delete secret pushharbor --ignore-not-found >/dev/null
 kubectl create secret generic pushharbor --from-file=fcm-service-account.json=target/helm-sa.json \
