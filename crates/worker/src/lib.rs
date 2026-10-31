@@ -68,7 +68,36 @@ async fn fetch(mut req: Request, env: Env, _ctx: worker::Context) -> Result<Resp
         .durable_object("RELAY")?
         .id_from_name("relay")?
         .get_stub()?;
-    stub.fetch_with_request(forwarded).await
+    let method = req.method();
+    let route = route_template(&method, &req.path());
+    let response = stub.fetch_with_request(forwarded).await?;
+    // Workers Analytics Engine, if bound: counts by method, route template and status only.
+    if let Ok(metrics) = env.analytics_engine("METRICS") {
+        let status = response.status_code().to_string();
+        let _ = worker::AnalyticsEngineDataPointBuilder::new()
+            .indexes([route])
+            .blobs([method.to_string(), route.to_owned(), status])
+            .add_double(1)
+            .write_to(&metrics);
+    }
+    Ok(response)
+}
+
+/// The route of an API path without its IDs (endpoint IDs and rids are capabilities).
+fn route_template(method: &Method, path: &str) -> &'static str {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    match (method, segments.as_slice()) {
+        (Method::Post | Method::Delete, ["v1", "push", _]) => "/v1/push/{id}",
+        (Method::Post, ["v1", "push", _, "rekey"]) => "/v1/push/{id}/rekey",
+        (Method::Post, ["v1", "registrations"]) => "/v1/registrations",
+        (Method::Post, ["v1", "registrations", _, "challenge"]) => {
+            "/v1/registrations/{rid}/challenge"
+        }
+        (Method::Post, ["v1", "registrations", _, "confirm"]) => "/v1/registrations/{rid}/confirm",
+        (Method::Get, ["v1", "admin", "export"]) => "/v1/admin/export",
+        (Method::Post, ["v1", "admin", "import"]) => "/v1/admin/import",
+        _ => "<unmatched>",
+    }
 }
 
 struct Config {

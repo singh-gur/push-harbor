@@ -22,6 +22,12 @@ class_name = "RelayObject"
 tag = "v1"
 new_sqlite_classes = ["RelayObject"]
 
+# Request counts by method, route template and status (no IDs); query with the Analytics Engine
+# SQL API. Remove this block to turn metrics off.
+[[analytics_engine_datasets]]
+binding = "METRICS"
+dataset = "pushharbor_requests"
+
 # Off on purpose: Workers Logs record request URLs, and endpoint IDs in them are capabilities.
 [observability]
 enabled = false

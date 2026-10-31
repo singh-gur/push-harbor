@@ -12,13 +12,16 @@ pub struct Config {
     /// Public origin (`https://push.example.com`): VAPID `aud` and the base of endpoint URLs.
     pub origin: String,
     pub listen: SocketAddr,
+    pub metrics_listen: Option<SocketAddr>,
     /// `sqlite://<path>` or `postgres://...`.
     pub database_url: String,
     pub fcm: ServiceAccount,
     pub provider_timeout: Duration,
+    pub request_timeout: Duration,
     pub limits: RateLimits,
     /// Take the client IP from `X-Forwarded-For` (only behind a trusted reverse proxy).
-    pub trust_proxy: bool,
+    /// Proxies in front of the relay that append to X-Forwarded-For (0: use the peer address).
+    pub trusted_proxies: usize,
     /// Enables the admin API (export/import) when set.
     pub admin_token: Option<String>,
 }
@@ -37,11 +40,17 @@ Configure with environment variables:
   PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE   path to the Firebase service-account JSON (or:)
   PUSHHARBOR_FCM_SERVICE_ACCOUNT        the service-account JSON itself
   PUSHHARBOR_LISTEN                     listen address (default 0.0.0.0:8080)
+  PUSHHARBOR_METRICS_LISTEN             address for GET /metrics (Prometheus), e.g. 0.0.0.0:9090;
+                                        off by default, keep it off the public network
   PUSHHARBOR_DATABASE_URL               sqlite://<path> (one instance; default
                                         sqlite:///data/pushharbor.db) or postgres://... (any
                                         number of instances: limits and idempotency are shared)
   PUSHHARBOR_PROVIDER_TIMEOUT_SECS      FCM request timeout (default 10)
-  PUSHHARBOR_TRUST_PROXY                true: client IP from X-Forwarded-For (default false)
+  PUSHHARBOR_REQUEST_TIMEOUT_SECS       whole-request timeout incl. body upload, then 408
+                                        (default 30). Header timeouts: run behind a TLS proxy
+  PUSHHARBOR_TRUST_PROXY                number of proxies in front that append to X-Forwarded-For
+                                        (true = 1); the client IP is taken that many entries from
+                                        the right (default 0: the TCP peer)
   PUSHHARBOR_LIMIT_<NAME>               <limit>/<window seconds>, NAME one of GLOBAL, PER_IP,
                                         PER_SENDER, PER_ENDPOINT, REGISTRATIONS_PER_IP,
                                         CHALLENGES_PER_TARGET
@@ -92,9 +101,24 @@ impl Config {
                 .unwrap_or_else(|| "0.0.0.0:8080".into())
                 .parse()
                 .map_err(|e| format!("PUSHHARBOR_LISTEN: {e}"))?,
+            metrics_listen: var("PUSHHARBOR_METRICS_LISTEN")
+                .map(|v| {
+                    v.parse()
+                        .map_err(|e| format!("PUSHHARBOR_METRICS_LISTEN: {e}"))
+                })
+                .transpose()?,
             database_url: var("PUSHHARBOR_DATABASE_URL")
                 .unwrap_or_else(|| "sqlite:///data/pushharbor.db".into()),
             fcm,
+            request_timeout: Duration::from_secs(
+                var("PUSHHARBOR_REQUEST_TIMEOUT_SECS")
+                    .map(|v| {
+                        v.parse()
+                            .map_err(|_| "PUSHHARBOR_REQUEST_TIMEOUT_SECS must be a number")
+                    })
+                    .transpose()?
+                    .unwrap_or(30),
+            ),
             provider_timeout: Duration::from_secs(
                 var("PUSHHARBOR_PROVIDER_TIMEOUT_SECS")
                     .map(|v| {
@@ -111,7 +135,13 @@ impl Config {
                 }
                 token => token,
             },
-            trust_proxy: var("PUSHHARBOR_TRUST_PROXY").is_some_and(|v| v == "true" || v == "1"),
+            trusted_proxies: match var("PUSHHARBOR_TRUST_PROXY").as_deref() {
+                None | Some("false") => 0,
+                Some("true") => 1,
+                Some(n) => n.parse().map_err(
+                    |_| "PUSHHARBOR_TRUST_PROXY must be a number of proxies or true/false",
+                )?,
+            },
         })
     }
 }

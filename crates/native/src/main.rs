@@ -17,7 +17,7 @@ use crate::adapters::{
     SqlRateLimiter, SqlStore, now, purge_expired,
 };
 use crate::config::{Config, USAGE};
-use crate::server::{AppState, router};
+use crate::server::{AppState, metrics_router, router};
 use pushharbor_core::export;
 
 const PURGE_EVERY: Duration = Duration::from_secs(600);
@@ -106,7 +106,8 @@ async fn main() {
         origin: config.origin.clone(),
         admin_token: config.admin_token.clone(),
         limits: config.limits,
-        trust_proxy: config.trust_proxy,
+        trusted_proxies: config.trusted_proxies,
+        request_timeout: config.request_timeout,
         account: config.fcm,
         store: SqlStore(pool),
         limiter,
@@ -114,6 +115,20 @@ async fn main() {
         http: ReqwestHttp::new(config.provider_timeout),
         cache: MemoryTokenCache::default(),
     });
+    if let Some(address) = config.metrics_listen {
+        let listener = tokio::net::TcpListener::bind(address)
+            .await
+            .unwrap_or_else(|e| fail(&format!("can't listen on {address}: {e}")));
+        tracing::info!(listen = %address, "metrics ready");
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, metrics_router()).await {
+                tracing::error!(error = %e, "metrics server stopped");
+            }
+        });
+    }
+    // shortcut: hyper's header-read timeout is inactive under axum::serve (no timer); the relay
+    // speaks plain HTTP and always sits behind a TLS proxy that enforces it. Use a custom hyper
+    // accept loop if it is ever exposed directly.
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await
         .unwrap_or_else(|e| fail(&format!("can't listen on {}: {e}", config.listen)));

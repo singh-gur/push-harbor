@@ -514,3 +514,39 @@ async fn export_import_round_trip() {
     assert_eq!(response.status(), 200);
     assert_eq!(r.push_as(&sub, &sender).await.status(), 201);
 }
+
+/// A client that stops sending its body mid-way gets 408 instead of holding the request open.
+/// Runs when `RELAY_REQUEST_TIMEOUT_SECS` names the relay's request timeout (native; Workers
+/// leave slow uploads to the platform).
+#[tokio::test]
+async fn stalled_upload_times_out() {
+    let r = relay!();
+    let Some(timeout) = std::env::var("RELAY_REQUEST_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    else {
+        return;
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let address = r.base.trim_start_matches("http://");
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    let head = format!(
+        "POST /v1/push/{} HTTP/1.1\r\nHost: {address}\r\nContent-Encoding: aes128gcm\r\n\
+         Content-Length: 2900\r\n\r\n",
+        "A".repeat(22)
+    );
+    stream.write_all(head.as_bytes()).await.unwrap();
+    stream.write_all(&[0; 100]).await.unwrap();
+    let started = Instant::now();
+    let mut response = vec![0; 64];
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(timeout + 5),
+        stream.read(&mut response),
+    )
+    .await
+    .expect("the relay must answer a stalled upload")
+    .unwrap();
+    let status_line = String::from_utf8_lossy(&response[..read]);
+    assert!(status_line.starts_with("HTTP/1.1 408"), "{status_line}");
+    assert!(started.elapsed().as_secs() + 1 >= timeout);
+}

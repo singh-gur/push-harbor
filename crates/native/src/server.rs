@@ -1,8 +1,9 @@
 //! HTTP routes. Logs carry the route template, status and latency only: never paths (endpoint
 //! IDs are capabilities), headers, bodies, targets or keys.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
@@ -29,13 +30,14 @@ use crate::adapters::{
 /// Push bodies are at most 2,900 B and JSON requests small; imports get their own, larger limit.
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_IMPORT_BYTES: usize = 256 * 1024 * 1024;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct AppState {
     pub origin: String,
     pub admin_token: Option<String>,
     pub limits: RateLimits,
-    pub trust_proxy: bool,
+    pub trusted_proxies: usize,
+    /// Whole request, body upload included; slower requests get 408.
+    pub request_timeout: Duration,
     pub account: ServiceAccount,
     pub store: SqlStore,
     pub limiter: NativeRateLimiter,
@@ -64,23 +66,31 @@ impl AppState {
     }
 
     fn client_ip(&self, headers: &HeaderMap, peer: SocketAddr) -> String {
-        let forwarded = || {
-            headers
-                .get("x-forwarded-for")?
-                .to_str()
-                .ok()?
-                .split(',')
-                .next()
-                .map(|ip| ip.trim().to_owned())
-        };
-        self.trust_proxy
-            .then(forwarded)
-            .flatten()
-            .unwrap_or_else(|| peer.ip().to_string())
+        client_ip(headers, peer, self.trusted_proxies)
     }
 }
 
+/// The client address for per-IP limits. Each trusted proxy appends the address it received the
+/// request from, so the client is `trusted_proxies` entries from the right; anything further left
+/// is client-supplied and spoofable. Falls back to the TCP peer.
+fn client_ip(headers: &HeaderMap, peer: SocketAddr, trusted_proxies: usize) -> String {
+    let forwarded = || {
+        let list = headers.get("x-forwarded-for")?.to_str().ok()?;
+        let entries: Vec<&str> = list.split(',').map(str::trim).collect();
+        let index = entries.len().checked_sub(trusted_proxies)?;
+        entries
+            .get(index)
+            .filter(|ip| !ip.is_empty())
+            .map(|ip| (*ip).to_owned())
+    };
+    (trusted_proxies > 0)
+        .then(forwarded)
+        .flatten()
+        .unwrap_or_else(|| peer.ip().to_string())
+}
+
 pub fn router(state: Arc<AppState>) -> Router {
+    let request_timeout = state.request_timeout;
     Router::new()
         .route(
             "/v1/health",
@@ -100,7 +110,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
-            REQUEST_TIMEOUT,
+            request_timeout,
         ))
         .with_state(state)
 }
@@ -268,12 +278,59 @@ async fn log_request(request: Request, next: Next) -> Response {
         .map_or("<unmatched>".to_owned(), |p| p.as_str().to_owned());
     let started = Instant::now();
     let response = next.run(request).await;
+    let status = response.status().as_u16();
     tracing::info!(
         %method,
         route,
-        status = response.status().as_u16(),
+        status,
         ms = started.elapsed().as_millis() as u64,
         "request"
     );
+    *REQUESTS
+        .lock()
+        .unwrap()
+        .entry((method.to_string(), route, status))
+        .or_default() += 1;
     response
+}
+
+/// Request counts by method, route template and status: the status says the outcome, including
+/// provider failures (410 gone, 503 provider unavailable, 500). Never endpoint IDs or other values.
+static REQUESTS: Mutex<BTreeMap<(String, String, u16), u64>> = Mutex::new(BTreeMap::new());
+
+/// Prometheus text exposition for `GET /metrics` on the separate metrics listener.
+pub fn metrics_router() -> Router {
+    Router::new().route(
+        "/metrics",
+        get(|| async {
+            let mut out = String::from(
+                "# HELP pushharbor_requests_total Requests by method, route template and status.\n\
+                 # TYPE pushharbor_requests_total counter\n",
+            );
+            for ((method, route, status), count) in REQUESTS.lock().unwrap().iter() {
+                out.push_str(&format!(
+                    "pushharbor_requests_total{{method=\"{method}\",route=\"{route}\",status=\"{status}\"}} {count}\n"
+                ));
+            }
+            ([("content-type", "text/plain; version=0.0.4")], out)
+        }),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_ip_counts_proxies_from_the_right() {
+        let peer: SocketAddr = "10.0.0.9:443".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        // The client claims 1.1.1.1; the trusted proxy appended the real address.
+        headers.insert("x-forwarded-for", "1.1.1.1, 203.0.113.7".parse().unwrap());
+        assert_eq!(client_ip(&headers, peer, 0), "10.0.0.9");
+        assert_eq!(client_ip(&headers, peer, 1), "203.0.113.7");
+        assert_eq!(client_ip(&headers, peer, 2), "1.1.1.1");
+        assert_eq!(client_ip(&headers, peer, 3), "10.0.0.9");
+        assert_eq!(client_ip(&HeaderMap::new(), peer, 1), "10.0.0.9");
+    }
 }

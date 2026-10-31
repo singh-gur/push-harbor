@@ -21,6 +21,11 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo clippy -p pushharbor-worker --target wasm32-unknown-unknown -- -D warnings
+      - run: python3 scripts/check-logging.py
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check
       - run: cargo test --workspace
       - run: cargo test -p pushharbor-core --target wasm32-wasip1
         env:

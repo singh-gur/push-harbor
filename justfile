@@ -19,6 +19,11 @@ lint:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p pushharbor-worker --target {{wasm_target}} -- -D warnings
+    python3 scripts/check-logging.py
+
+# Dependency audit: advisories, licenses, sources (needs cargo-deny)
+audit:
+    cargo deny check
 
 # Run all tests
 test:
@@ -43,7 +48,8 @@ bench-vapid:
 # Conformance suite against a running relay configured per crates/conformance docs; optional log check
 conformance relay_url log="":
     rm -f {{secrets}}
-    CONFORMANCE_SECRETS={{secrets}} RELAY_URL={{relay_url}} cargo test -p pushharbor-conformance --test conformance
+    CONFORMANCE_SECRETS={{secrets}} RELAY_URL={{relay_url}} RELAY_REQUEST_TIMEOUT_SECS=${RELAY_REQUEST_TIMEOUT_SECS:-} \
+      cargo test -p pushharbor-conformance --test conformance
     CONFORMANCE_SECRETS={{secrets}} RELAY_LOG={{log}} cargo test -p pushharbor-conformance --test logs
 
 # Conformance suite against the native server (SQLite) started with the suite's contract config
@@ -51,8 +57,13 @@ conformance-native:
     #!/usr/bin/env bash
     set -euo pipefail
     log=$(mktemp)
+    metrics=$(mktemp)
     scripts/with-native.sh http://127.0.0.1:8080 "sqlite://$(mktemp -d)/pushharbor.db" "$log" \
-      just conformance http://127.0.0.1:8080 "$log"
+      bash -c "RELAY_REQUEST_TIMEOUT_SECS=8 just conformance http://127.0.0.1:8080 $log && \
+        curl -sf http://127.0.0.1:9080/metrics > $metrics"
+    # Metrics count outcomes and carry no identifiers (same check as the logs).
+    grep -q 'pushharbor_requests_total{method="POST",route="/v1/push/{id}",status="201"}' "$metrics"
+    CONFORMANCE_SECRETS={{secrets}} RELAY_LOG=$metrics cargo test -q -p pushharbor-conformance --test logs
 
 # Conformance suite against two native instances sharing a PostgreSQL database (Docker), plus
 # the multi-instance test (shared limits, idempotency and pending registrations)
@@ -68,7 +79,7 @@ conformance-postgres:
     log=$(mktemp)
     scripts/with-native.sh http://127.0.0.1:8080 $db "$log" \
       env PUSHHARBOR_LISTEN=127.0.0.1:8081 scripts/with-native.sh http://127.0.0.1:8080 $db "$log.b" \
-      bash -c "just conformance http://127.0.0.1:8080 $log && \
+      bash -c "RELAY_REQUEST_TIMEOUT_SECS=8 just conformance http://127.0.0.1:8080 $log && \
         RELAY_URL=http://127.0.0.1:8080 RELAY_URL_2=http://127.0.0.1:8081 CONFORMANCE_SECRETS={{secrets}} \
         cargo test -p pushharbor-conformance --test multi_instance && \
         CONFORMANCE_SECRETS={{secrets}} RELAY_LOG=$log.b cargo test -p pushharbor-conformance --test logs"
@@ -133,7 +144,7 @@ run-native *args:
     cargo run -p pushharbor-native -- {{args}}
 
 # Everything CI runs
-ci: lint test test-wasm build-wasm
+ci: lint audit test test-wasm build-wasm
 
 # Build the Expo module and run its Kotlin unit tests (spec vectors) through the example app.
 # Without examples/expo/google-services.json a placeholder is used (enough to build, not to receive pushes).
