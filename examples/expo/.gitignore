@@ -52,3 +52,4 @@ google-services.json
 service-account.json
 subscription.json
 vapid.json
+.e2e/

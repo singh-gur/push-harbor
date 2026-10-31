@@ -24,7 +24,7 @@ through FCM to the device](docs/assets/architecture.png)
 
 | | |
 |---|---|
-| Android (FCM) | Supported: relay, Expo module, end-to-end tested on an emulator |
+| Android (FCM) | Supported: relay, Expo module, end-to-end tested on a Pixel 8 Pro (Android 17) through both relays |
 | iOS (APNs) | Planned; the protocol and payload cap already account for it |
 | Releases | Not yet published (container image on the first tag, npm package after) |
 

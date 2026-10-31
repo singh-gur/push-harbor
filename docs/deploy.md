@@ -63,8 +63,10 @@ npx wrangler deploy --var PUSHHARBOR_ORIGIN:https://push.example.com
 - The Durable Object class and its SQLite storage are created by the `[[migrations]]` block on
   the first deploy; later deploys keep the data.
 - Limits: `--var PUSHHARBOR_LIMIT_PER_ENDPOINT:60/60` etc., or `[vars]`.
-- Metrics: request counts by route and status go to the Workers Analytics Engine dataset
-  `pushharbor_requests` (`METRICS` binding); query them with the Analytics Engine SQL API.
+- Metrics (optional): enable Analytics Engine in the Cloudflare dashboard, then uncomment the
+  `METRICS` binding in `wrangler.toml`. Request counts by route and status then go to the dataset
+  `pushharbor_requests`; query them with the Analytics Engine SQL API. Deploys fail if the
+  binding is present while Analytics Engine is disabled.
 - Workers Logs are off on purpose (`observability.enabled = false`): they would record request
   URLs, and endpoint IDs are capabilities.
 - Free plan: about 3 ms CPU per send, under the 10 ms limit; occasional cold starts can exceed
