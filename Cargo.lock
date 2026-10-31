@@ -1417,12 +1417,15 @@ dependencies = [
 name = "pushharbor-conformance"
 version = "0.0.0"
 dependencies = [
+ "aes-gcm",
  "axum",
  "base64 0.23.1",
  "getrandom 0.4.3",
+ "hkdf",
  "p256",
  "reqwest",
  "serde_json",
+ "sha2 0.11.1",
  "tokio",
 ]
 

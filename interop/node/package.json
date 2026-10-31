@@ -1,0 +1,11 @@
+{
+  "name": "pushharbor-interop-node",
+  "version": "1.0.0",
+  "description": "PH-22 interop sender: web-push",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

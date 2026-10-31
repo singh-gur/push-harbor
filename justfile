@@ -49,20 +49,31 @@ conformance relay_url log="":
 conformance-native:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build -q -p pushharbor-native
-    db=$(mktemp -d)/pushharbor.db; log=$(mktemp)
-    PUSHHARBOR_ORIGIN=http://127.0.0.1:8080 PUSHHARBOR_LISTEN=127.0.0.1:8080 \
-    PUSHHARBOR_DATABASE_URL=sqlite://$db \
-    PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE=crates/conformance/fixtures/service-account.json \
-    PUSHHARBOR_FCM_API_BASE=http://127.0.0.1:9790 PUSHHARBOR_PROVIDER_TIMEOUT_SECS=5 \
-    PUSHHARBOR_LIMIT_GLOBAL=1000000/60 PUSHHARBOR_LIMIT_PER_IP=1000000/60 \
-    PUSHHARBOR_LIMIT_PER_SENDER=10/60 PUSHHARBOR_LIMIT_PER_ENDPOINT=5/60 \
-    PUSHHARBOR_LIMIT_REGISTRATIONS_PER_IP=1000000/3600 PUSHHARBOR_LIMIT_CHALLENGES_PER_TARGET=5/3600 \
-    RUST_LOG=debug target/debug/pushharbor-native > "$log" 2>&1 &
-    relay=$!
-    trap 'kill $relay 2>/dev/null || true' EXIT
-    for _ in $(seq 50); do curl -sf http://127.0.0.1:8080/v1/health >/dev/null && break; sleep 0.2; done
-    just conformance http://127.0.0.1:8080 "$log"
+    log=$(mktemp)
+    scripts/with-native.sh http://127.0.0.1:8080 "sqlite://$(mktemp -d)/pushharbor.db" "$log" \
+      just conformance http://127.0.0.1:8080 "$log"
+
+# Install the interop senders' dependencies (needs node, go, docker; python runs via uv)
+interop-setup:
+    cd interop/node && npm ci --silent
+    cd interop/go && go build -o ../../target/interop/go-send .
+    docker run --rm -v "$PWD/interop/php":/app:Z -w /app composer:2 install -q --no-progress
+
+# Sender interop (PH-22): Web Push libraries send to the native relay behind a local TLS proxy
+interop-native libs="node,python,go,php": interop-setup
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=target/interop; mkdir -p $dir
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=127.0.0.1 \
+      -addext subjectAltName=IP:127.0.0.1 -keyout $dir/tls-key.pem -out $dir/tls-cert.pem 2>/dev/null
+    # Port 443 (in a container, so no root is needed): web-push-php drops the port from the VAPID aud.
+    docker run -d --rm --name ph-tls-proxy --network host -v "$PWD":/repo:Z -w /repo node:24-alpine \
+      node interop/tls-proxy.mjs 443 8080 $dir/tls-cert.pem $dir/tls-key.pem >/dev/null
+    trap 'docker rm -f ph-tls-proxy >/dev/null 2>&1 || true' EXIT
+    RELAY_URL=http://127.0.0.1:8080 INTEROP_LIBS={{libs}} INTEROP_CA=$PWD/$dir/tls-cert.pem \
+    CONFORMANCE_SECRETS={{secrets}} scripts/with-native.sh https://127.0.0.1 \
+      "sqlite://$(mktemp -d)/pushharbor.db" "$(mktemp)" \
+      cargo test -p pushharbor-conformance --test interop -- --nocapture
 
 # Run the native server
 run-native *args:
