@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Pushharbor Example",
+    "slug": "pushharbor-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "pushharborexample",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "dev.pushharbor.testapp",
+      "googleServicesFile": "./google-services.json"
+    },
+    "platforms": ["android"],
+    "plugins": ["./plugins/bundle-in-debug.js"]
+  }
+}

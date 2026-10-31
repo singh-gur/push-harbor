@@ -1,0 +1,31 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'dev.pushharbor.expo'
+version = '0.1.0'
+
+android {
+  namespace "dev.pushharbor.expo"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+}
+
+dependencies {
+  implementation platform('com.google.firebase:firebase-bom:35.1.0')
+  implementation 'com.google.firebase:firebase-messaging'
+  implementation 'com.google.firebase:firebase-installations'
+  implementation 'androidx.core:core-ktx:1.19.1'
+  testImplementation 'junit:junit:4.13.2'
+  // Android's org.json is a stub in local unit tests.
+  testImplementation 'org.json:json:20260814'
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@pushharbor/expo",
+  "version": "0.1.0",
+  "description": "Pushharbor client for Expo / React Native: end-to-end encrypted Web Push through a Pushharbor relay",
+  "license": "MIT",
+  "repository": "github:singh-gur/push-harbor",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "android/build.gradle",
+    "android/src/main",
+    "expo-module.config.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "web-push",
+    "push-notifications",
+    "pushharbor"
+  ],
+  "devDependencies": {
+    "expo": "58.0.21",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "expo": ">=58",
+    "react-native": "*"
+  }
+}

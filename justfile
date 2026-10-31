@@ -81,3 +81,20 @@ run-native *args:
 
 # Everything CI runs
 ci: lint test test-wasm build-wasm
+
+# Build the Expo module and run its Kotlin unit tests (spec vectors) through the example app.
+# Without examples/expo/google-services.json a placeholder is used (enough to build, not to receive pushes).
+test-expo:
+    cd packages/expo && npm ci --silent && npx tsc
+    cd examples/expo && npm ci --silent && { [ -f google-services.json ] || cp google-services.placeholder.json google-services.json; } \
+      && npx tsc --noEmit && npx expo prebuild --platform android --clean > /dev/null
+    cd examples/expo/android && ./gradlew -q :pushharbor-expo:testDebugUnitTest
+
+# Native relay with real FCM for the example app on an emulator or USB device: run it, then
+# `adb reverse tcp:8080 tcp:8080` and register with relay URL http://127.0.0.1:8080.
+# Needs examples/expo/service-account.json (Firebase service account; gitignored).
+example-relay:
+    PUSHHARBOR_ORIGIN=http://127.0.0.1:8080 PUSHHARBOR_LISTEN=127.0.0.1:8080 \
+    PUSHHARBOR_DATABASE_URL="sqlite://$(mktemp -d)/pushharbor.db" \
+    PUSHHARBOR_FCM_SERVICE_ACCOUNT_FILE=examples/expo/service-account.json \
+    cargo run -q -p pushharbor-native
