@@ -63,7 +63,7 @@ jobs:
         with:
           go-version-file: interop/go/go.mod
           cache-dependency-path: interop/go/go.sum
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
       - uses: taiki-e/install-action@v2
         with:
           tool: just
