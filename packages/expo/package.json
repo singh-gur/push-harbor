@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Pushharbor client for Expo / React Native: end-to-end encrypted Web Push through a Pushharbor relay",
   "license": "MIT",
-  "repository": "github:singh-gur/push-harbor",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -32,5 +31,17 @@
   "peerDependencies": {
     "expo": ">=58",
     "react-native": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/singh-gur/push-harbor.git",
+    "directory": "packages/expo"
+  },
+  "homepage": "https://github.com/singh-gur/push-harbor/blob/main/docs/expo.md",
+  "bugs": {
+    "url": "https://github.com/singh-gur/push-harbor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

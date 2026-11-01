@@ -4,6 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+description = "Pushharbor protocol core: Web Push (RFC 8030/8291/8292) validation, VAPID binding, challenge registration and FCM delivery for a push relay, without I/O (native and wasm32)"
+keywords = ["web-push", "push-notifications", "vapid", "fcm", "relay"]
+categories = ["network-programming", "web-programming", "wasm", "cryptography"]
+# Tests and examples read the spec's test vectors from outside the crate (docs/spec/vectors).
+exclude = ["tests/", "examples/"]
 
 [dependencies]
 base64 = { version = "0.23.1", default-features = false, features = ["alloc"] }
