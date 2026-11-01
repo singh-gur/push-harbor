@@ -1,0 +1,15 @@
+# Keeps the pinned action SHAs and base-image digests current (pinning without updates would
+# freeze known vulnerabilities in place). Review each PR like a code change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
