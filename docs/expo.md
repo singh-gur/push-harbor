@@ -26,10 +26,6 @@ npx expo install @pushharbor/expo
 npx expo prebuild --platform android   # or: npx expo run:android
 ```
 
-The package isn't on npm yet. Until it is, build it from this repository and install the
-tarball: `cd packages/expo && npm ci && npm pack`, then
-`npm install /path/to/pushharbor-expo-0.1.0.tgz` in your app.
-
 **No config plugin is needed on Android.** The module's manifest adds its FCM service and opts
 in to Firebase Installation IDs. **It must be the app's only FCM message handler**: don't use
 `expo-notifications` remote push or `@react-native-firebase/messaging` in the same app, because

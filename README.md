@@ -8,6 +8,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Android: supported](https://img.shields.io/badge/Android-supported-3ddc84)
 ![iOS: planned](https://img.shields.io/badge/iOS-planned-lightgrey)
+[![crates.io](https://img.shields.io/crates/v/pushharbor-native.svg)](https://crates.io/crates/pushharbor-native)
+[![npm](https://img.shields.io/npm/v/@pushharbor/expo.svg)](https://www.npmjs.com/package/@pushharbor/expo)
 
 </div>
 
@@ -93,6 +95,16 @@ await webpush.sendNotification(subscription, JSON.stringify({
 
 That's the whole integration. No SDK on the server, no account, no keys to distribute.
 
+## Install
+
+| What | Get it |
+|---|---|
+| Relay, container | `docker pull ghcr.io/singh-gur/pushharbor-native:0.1.0` |
+| Relay, binary | `cargo install pushharbor-native` |
+| Relay, Cloudflare Workers | deploy from [`crates/worker`](docs/deploy.md#cloudflare-workers) |
+| App module | `npx expo install @pushharbor/expo` |
+| Protocol library (Rust) | `cargo add pushharbor-core` |
+
 ## How it compares
 
 | | Ship your FCM key to every server | Run a plain push proxy | **Pushharbor** |
@@ -123,7 +135,7 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 |---|---|
 | **Android** | Supported: relay (Workers and container), Expo / React Native module, real-device tested |
 | **iOS** | Planned: the protocol and message size limit are already designed for APNs |
-| **Releases** | Pre-release: the container image and the npm package publish with the first tagged version |
+| **Releases** | [v0.1.0](https://github.com/singh-gur/push-harbor/releases/tag/v0.1.0): container image, crates and npm package |
 
 ## Documentation
 
