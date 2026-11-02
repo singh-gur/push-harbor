@@ -2,8 +2,9 @@
 
 Manual checks on a physical phone, through both hosting options. Run them before a release and
 when the Expo module, the relay or the protocol changes. iOS-5 reuses this list with its own
-device steps. Last run: Pixel 8 Pro, Android 17, 2026-10-31 (PH-11): all checks passed on native
-and Workers.
+device steps. Last full run: Pixel 8 Pro, Android 17, 2026-10-31 (PH-11): all checks passed on
+native and Workers. Last partial run: emulator, 2026-11-02 (PH-34): checks 1–4, 7 and 9 passed
+with the native and the Expo example.
 
 ## Setup
 
@@ -84,3 +85,15 @@ Not on this list because the emulator run covers it: FCM ID rotation keeping the
 | 7–9 | pass | pass (7 via the module's DELETE call) |
 | 10 | pass (forced deep idle, screen off, app killed) | not repeated |
 | 11 | 410 at +10 s, then 404 | 410 at +10 s, then 404 |
+
+## Results 2026-11-02 (Pixel 8 Pro emulator, Android 17, native relay; PH-34)
+
+After the client moved into `packages/android`. Before that, a subscription made with the
+v0.1.0 Expo build was still listed, decrypted and shown after installing the new build over it.
+
+| # | Native example | Expo example |
+|---|---|---|
+| 1 | 0.6 s / 0.6 s | 0.6 s (after resending the link once, see Setup) / 0.6 s |
+| 2–4 | pass (3: 2,797 B 201 and shown, 2,798 B 413) | pass |
+| 7 | pass | pass |
+| 9 | pass | pass |

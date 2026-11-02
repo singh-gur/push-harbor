@@ -198,12 +198,12 @@ Outputs: `examples/android`, CI job, docs.
 
 - Objective: re-run `docs/testing/android-e2e.md` checks 1–4, 7, 9 on the `Pixel_8_Pro`
   emulator with the native relay, for the native and the Expo example.
-- Status: In Progress
+- Status: Complete
 - Prerequisites: Phases 2 and 3; user-provided `examples/android/app/google-services.json`
   for `dev.pushharbor.nativeapp` in the test Firebase project.
 
 Verification:
-- [ ] All six checks pass for both apps; "Last run" line in `docs/testing/android-e2e.md` updated.
+- [x] All six checks pass for both apps; "Last run" line in `docs/testing/android-e2e.md` updated.
 
 Completion Gate: user confirms Phase 4; then PH-34 can move to Done.
 
