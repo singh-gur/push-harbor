@@ -182,6 +182,13 @@ run-native *args:
 # Everything CI runs
 ci: lint audit test test-wasm build-wasm
 
+# Android library: Kotlin unit tests (spec vectors) and build, plus the native example app.
+# Without examples/android/app/google-services.json a placeholder is used (enough to build, not to receive pushes).
+test-android:
+    cd packages/android && ./gradlew -q testDebugUnitTest assembleDebug
+    cd examples/android && { [ -f app/google-services.json ] || cp app/google-services.placeholder.json app/google-services.json; } \
+      && ./gradlew -q :app:assembleDebug
+
 # Build the Expo module with the bundled Android library through the example app, and check the
 # npm package carries the library (android-lib/). Kotlin unit tests run in packages/android.
 # Without examples/expo/google-services.json a placeholder is used (enough to build, not to receive pushes).

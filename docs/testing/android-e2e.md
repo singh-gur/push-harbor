@@ -43,6 +43,18 @@ Send as a server: `VAPID=.e2e/serverA.json SUB=.e2e/A.json node scripts/send.mjs
 `adb shell dumpsys notification --noredact`, looking only at records with
 `pkg=dev.pushharbor.testapp`.
 
+### Native example (`examples/android`)
+
+The same checks run against the native Kotlin example; only the app differs:
+
+- Firebase: the test project also has the Android app `dev.pushharbor.nativeapp`; its
+  `google-services.json` goes to `examples/android/app/` (not in git; replace the placeholder
+  copy `just test-android` may have left there).
+- Install: `cd examples/android && ./gradlew :app:installDebug`.
+- Package `dev.pushharbor.nativeapp` instead of `dev.pushharbor.testapp`, and the deep link
+  `pushharbornative://register?relay=…&key=…` instead of `pushharborexample://…`. It writes
+  `files/subscription.json` the same way. The send script stays in `examples/expo`.
+
 ## Checks (repeat for each relay)
 
 | # | Check | How | Expected |

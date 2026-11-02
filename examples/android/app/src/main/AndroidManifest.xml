@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application
+    android:icon="@drawable/ic_notification"
+    android:label="Pushharbor Native"
+    android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <!-- Monochrome icon for Pushharbor's notifications (defaults to the app icon). -->
+    <meta-data android:name="dev.pushharbor.notification_icon" android:resource="@drawable/ic_notification" />
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <!-- pushharbornative://register?relay=<url>&key=<VAPID public key>, for scripted tests. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="pushharbornative" android:host="register" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

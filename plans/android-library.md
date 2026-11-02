@@ -173,7 +173,7 @@ Outputs: slim `packages/expo`, updated `justfile`.
 ### Phase 3: Native example, CI, docs
 
 - Objective: native example app, CI job, documentation.
-- Status: In Progress
+- Status: Complete
 - Complexity: Medium
 - Estimated Time: 60–90 min
 - Prerequisites: Phase 1
@@ -188,8 +188,8 @@ Outputs: slim `packages/expo`, updated `justfile`.
 | `docs/testing/android-e2e.md` | modify | Native example setup (`dev.pushharbor.nativeapp`, deep link) |
 
 Verification:
-- [ ] `just test-android` passes.
-- [ ] `python3 scripts/check-logging.py` passes.
+- [x] `just test-android` passes.
+- [x] `python3 scripts/check-logging.py` passes.
 
 Completion Gate: user confirms Phase 3.
 Outputs: `examples/android`, CI job, docs.
@@ -198,7 +198,7 @@ Outputs: `examples/android`, CI job, docs.
 
 - Objective: re-run `docs/testing/android-e2e.md` checks 1–4, 7, 9 on the `Pixel_8_Pro`
   emulator with the native relay, for the native and the Expo example.
-- Status: Not Started
+- Status: In Progress
 - Prerequisites: Phases 2 and 3; user-provided `examples/android/app/google-services.json`
   for `dev.pushharbor.nativeapp` in the test Firebase project.
 

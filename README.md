@@ -103,6 +103,7 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 | Relay, binary | `cargo install pushharbor-native` |
 | Relay, Cloudflare Workers | deploy from [`crates/worker`](docs/deploy.md#cloudflare-workers) |
 | App module | `npx expo install @pushharbor/expo` |
+| Android library (Kotlin/Java) | from source for now ([guide](docs/android.md#install)) |
 | Protocol library (Rust) | `cargo add pushharbor-core` |
 
 ## How it compares
@@ -133,7 +134,7 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 
 | | |
 |---|---|
-| **Android** | Supported: relay (Workers and container), Expo / React Native module, real-device tested |
+| **Android** | Supported: relay (Workers and container), Expo / React Native module, native Kotlin/Java library, real-device tested |
 | **iOS** | Planned: the protocol and message size limit are already designed for APNs |
 | **Releases** | [v0.1.0](https://github.com/singh-gur/push-harbor/releases/tag/v0.1.0): container image, crates and npm package |
 
@@ -144,12 +145,13 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 | [Deploy a relay](docs/deploy.md) | App publishers: Firebase setup, Workers, Docker Compose, Helm, Cloud Run, moving between them |
 | [Send notifications](docs/sending.md) | Server developers: Node, Python, Go and PHP, with errors and retries |
 | [Expo module](docs/expo.md) | App developers: install, register, receive |
+| [Android library](docs/android.md) | Native Android app developers (Kotlin or Java): install, register, receive |
 | [Protocol spec](docs/spec/README.md) | Implementers: APIs, encryption envelope, errors, test vectors |
 
 ## Contributing
 
 Pushharbor is written in Rust (one core shared by the Workers and container builds) with a
-Kotlin/TypeScript Expo module. You need Rust, Node.js and Docker; run `just` to list tasks and
+Kotlin Android library and a TypeScript Expo module over it. You need Rust, Node.js and Docker; run `just` to list tasks and
 `just ci` for the checks CI runs first.
 
 <details>
@@ -159,7 +161,9 @@ Kotlin/TypeScript Expo module. You need Rust, Node.js and Docker; run `just` to 
 - `crates/native`: axum/tokio server for containers (SQLite or PostgreSQL)
 - `crates/worker`: Cloudflare Workers + Durable Objects adapter
 - `crates/conformance`: black-box test suite every hosting option must pass
-- `packages/expo`: Expo / React Native client module (Android); example app in `examples/expo`
+- `packages/android`: Android client library (Kotlin); native example app in `examples/android`
+- `packages/expo`: Expo / React Native client module (Android, wraps `packages/android`); example
+  app in `examples/expo`
 - `examples/senders`: sending examples from the guide, tested in CI
 - `interop`: Web Push libraries (Node, Python, Go, PHP) tested against the relay
 - `deploy`: reference deployments (Compose, Helm, Cloud Run)
