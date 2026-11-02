@@ -8,7 +8,9 @@ name: Release
 # environment. Versions already on a registry are skipped, so re-running is safe.
 # Manual runs only build the image, without pushing it; with `maven_dry_run` they also upload the
 # Android library to Maven Central under a throwaway -dryrun version, wait for validation and
-# drop it again (nothing is published).
+# drop it again (nothing is published). The `release` environment only accepts `v*` tags, so start
+# a dry run on a throwaway tag (e.g. v0.1.0-dryrun.1; its own tag-push run fails at the version
+# check before publishing anything) and delete the tag afterwards.
 #
 # Jobs that can publish never install or compile third-party code (no npm install scripts, no
 # build.rs, no Gradle): unprivileged jobs build and verify, the publish jobs only sign and upload.
@@ -68,7 +70,7 @@ jobs:
 
   # Unprivileged: package and fully verify the crates (this compiles dependencies).
   crates-verify:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !inputs.maven_dry_run
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -111,7 +113,7 @@ jobs:
 
   # Unprivileged: install dev dependencies, build and pack the npm package.
   npm-pack:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !inputs.maven_dry_run
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -168,7 +170,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - if: startsWith(github.ref, 'refs/tags/v')
+      - if: startsWith(github.ref, 'refs/tags/v') && !inputs.maven_dry_run
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
       - name: Build the bundle
         working-directory: packages/android
