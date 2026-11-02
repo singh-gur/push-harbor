@@ -10,6 +10,7 @@
 ![iOS: planned](https://img.shields.io/badge/iOS-planned-lightgrey)
 [![crates.io](https://img.shields.io/crates/v/pushharbor-native.svg)](https://crates.io/crates/pushharbor-native)
 [![npm](https://img.shields.io/npm/v/@pushharbor/expo.svg)](https://www.npmjs.com/package/@pushharbor/expo)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.singh-gur/pushharbor-android.svg)](https://central.sonatype.com/artifact/io.github.singh-gur/pushharbor-android)
 
 </div>
 
@@ -99,11 +100,11 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 
 | What | Get it |
 |---|---|
-| Relay, container | `docker pull ghcr.io/singh-gur/pushharbor-native:0.1.0` |
+| Relay, container | `docker pull ghcr.io/singh-gur/pushharbor-native:0.2.0` |
 | Relay, binary | `cargo install pushharbor-native` |
 | Relay, Cloudflare Workers | deploy from [`crates/worker`](docs/deploy.md#cloudflare-workers) |
 | App module | `npx expo install @pushharbor/expo` (bare React Native: [steps](docs/expo.md#bare-react-native)) |
-| Android library (Kotlin/Java) | from source for now ([guide](docs/android.md#install)) |
+| Android library (Kotlin/Java) | `implementation("io.github.singh-gur:pushharbor-android:0.2.0")` ([guide](docs/android.md#install)) |
 | Protocol library (Rust) | `cargo add pushharbor-core` |
 
 ## How it compares
@@ -136,7 +137,7 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 |---|---|
 | **Android** | Supported: relay (Workers and container), Expo / React Native module, native Kotlin/Java library, real-device tested |
 | **iOS** | Planned: the protocol and message size limit are already designed for APNs |
-| **Releases** | [v0.1.0](https://github.com/singh-gur/push-harbor/releases/tag/v0.1.0): container image, crates and npm package |
+| **Releases** | [v0.2.0](https://github.com/singh-gur/push-harbor/releases/tag/v0.2.0): container image, crates, npm package and Android library (Maven Central) |
 
 ## Documentation
 

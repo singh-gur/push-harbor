@@ -1,6 +1,6 @@
 {
   "name": "@pushharbor/expo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pushharbor client for Expo / React Native: end-to-end encrypted Web Push through a Pushharbor relay",
   "license": "MIT",
   "main": "build/index.js",

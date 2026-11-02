@@ -20,7 +20,7 @@ spec:
       containers:
         # Public GHCR images can be deployed directly; Google recommends mirroring them through
         # an Artifact Registry remote repository.
-        - image: ghcr.io/singh-gur/pushharbor-native:0.1.0
+        - image: ghcr.io/singh-gur/pushharbor-native:0.2.0
           ports:
             - containerPort: 8080
           env:

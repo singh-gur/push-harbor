@@ -87,7 +87,7 @@ docker compose up -d
 - The DNS name must point at the host and ports 80/443 must be reachable for Caddy's certificate.
 - The service-account file must be readable by UID 65532 inside the container (hence `644`; the
   `700` directory keeps other users on the host out).
-- Pin a version with `PUSHHARBOR_VERSION=0.1.0`. Upgrade: `docker compose pull && docker compose up -d`.
+- Pin a version with `PUSHHARBOR_VERSION=0.2.0`. Upgrade: `docker compose pull && docker compose up -d`.
 - Back up the `data` volume (SQLite) or use the export API.
 - One instance only: rate limits live in its memory. For more, use PostgreSQL (Helm, Cloud Run).
 

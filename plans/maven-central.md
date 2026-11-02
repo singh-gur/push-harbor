@@ -76,7 +76,7 @@ first (permanent) publish with v0.2.0.
 
 ### Phase 2: Release jobs and dry run
 
-- Status: In Progress
+- Status: Complete
 - Prerequisites: Phase 1
 
 | Path | Action | Purpose |
@@ -94,11 +94,11 @@ first (permanent) publish with v0.2.0.
   Real: PUBLISHED → ok, PUBLISHING at timeout → ok with note, FAILED → print `errors`, exit 1.
   Dry run: VALIDATED → DELETE (expect 204) → ok; FAILED → print errors, keep, exit 1.
 - [x] Implement; push; owner starts "Release" manually with `maven_dry_run` and approves.
-- [ ] Verify: run log shows `VALIDATED` and DELETE 204.
+- [x] Verify: run log shows `VALIDATED` and DELETE 204.
 
 ### Phase 3: v0.2.0 release
 
-- Status: Not Started
+- Status: In Progress
 - Prerequisites: Phase 2 dry run passed
 
 - [ ] Bump to 0.2.0: `Cargo.toml` workspace version, `crates/native/Cargo.toml` and

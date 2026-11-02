@@ -17,25 +17,28 @@ A complete app using it: [examples/android](../examples/android).
 
 ## Install
 
-The library is not on Maven Central yet. Until it is, include it from a checkout of this
-repository (for example a Git submodule) in `settings.gradle`:
+The library is on Maven Central. In your app module:
+
+```groovy
+dependencies {
+  implementation("io.github.singh-gur:pushharbor-android:0.2.0")
+}
+```
+
+Releases are signed with the PGP key `0DA6688B8C505B5C477444D4B6AB8A752A2A2A92`
+(on keyserver.ubuntu.com and keys.openpgp.org).
+
+To build from source instead, include `packages/android` from a checkout of this repository
+(for example a Git submodule) in `settings.gradle` and depend on `project(':pushharbor-android')`:
 
 ```groovy
 include ':pushharbor-android'
 project(':pushharbor-android').projectDir = file('../push-harbor/packages/android')
 ```
 
-and depend on it from your app module:
-
-```groovy
-dependencies {
-  implementation project(':pushharbor-android')
-}
-```
-
-The included build file needs the Android Gradle plugin (9.x) and the Kotlin Android plugin
-available in your build, with `android.builtInKotlin=false` in `gradle.properties` (the same
-setup React Native apps use); see [examples/android](../examples/android) for a complete build.
+The included build file needs the Android Gradle plugin (9.x) and the Kotlin Android plugin in
+your build, with `android.builtInKotlin=false` in `gradle.properties` (the same setup React
+Native apps use); see [examples/android](../examples/android) for a complete build.
 
 **No manifest changes are needed.** The library's manifest adds its FCM service, the
 `INTERNET`, `POST_NOTIFICATIONS` and `ACCESS_LOCAL_NETWORK` permissions, and opts in to Firebase
