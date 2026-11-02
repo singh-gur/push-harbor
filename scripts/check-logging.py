@@ -13,7 +13,11 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCES = [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("packages/expo/android/src/main/**/*.kt")]
+SOURCES = [
+    *ROOT.glob("crates/*/src/**/*.rs"),
+    *ROOT.glob("packages/android/src/main/**/*.kt"),
+    *ROOT.glob("packages/expo/android/src/main/**/*.kt"),
+]
 CALL = re.compile(
     r"\b(?:tracing::(?:trace|debug|info|warn|error)!|(?:worker::)?console_(?:log|debug|warn|error)!"
     r"|Log\.[dviwe])\s*\("

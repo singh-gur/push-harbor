@@ -1,0 +1,40 @@
+// Also used unchanged as subproject :pushharbor-android of Expo apps (bundled in @pushharbor/expo):
+// no plugin versions or repositories here, and SDK levels follow the app when it sets them.
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+  id 'com.android.library'
+  id 'org.jetbrains.kotlin.android'
+}
+
+android {
+  namespace 'io.github.singhgur.pushharbor'
+  compileSdk rootProject.ext.has('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 37
+  defaultConfig {
+    minSdk 24
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget = JvmTarget.JVM_17
+  }
+}
+
+dependencies {
+  implementation platform('com.google.firebase:firebase-bom:35.1.0')
+  implementation 'com.google.firebase:firebase-messaging'
+  implementation 'com.google.firebase:firebase-installations'
+  implementation 'androidx.core:core-ktx:1.19.1'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
+  testImplementation 'junit:junit:4.13.2'
+  // Android's org.json is a stub in local unit tests.
+  testImplementation 'org.json:json:20260814'
+}
