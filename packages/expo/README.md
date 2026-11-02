@@ -22,7 +22,8 @@ const subscription = await Pushharbor.register({
 await api.post('/push/subscriptions', subscription); // { id, endpoint, expirationTime, keys }
 ```
 
-Requires Expo SDK 58+ with a development build and a Firebase project for your app.
+Requires Expo SDK 58+ with a development build (or a bare React Native app with Expo modules)
+and a Firebase project for your app.
 
 - [Usage guide](https://github.com/singh-gur/push-harbor/blob/main/docs/expo.md)
 - [Sending from your server](https://github.com/singh-gur/push-harbor/blob/main/docs/sending.md)

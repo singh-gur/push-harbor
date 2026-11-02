@@ -10,7 +10,8 @@ A complete app using it: [examples/expo](../examples/expo).
 ## Requirements
 
 - Expo SDK 58 or newer with a [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-  (Expo Go can't load native modules). Android 7 (API 24) or newer.
+  (Expo Go can't load native modules), or a bare React Native app with Expo modules installed
+  ([steps below](#bare-react-native)). Android 7 (API 24) or newer.
 - A Firebase project with your Android app added (its package name), and the relay for that
   Firebase project ([deploy guide](deploy.md)).
 - `google-services.json` from the Firebase console, referenced in `app.json`:
@@ -30,6 +31,43 @@ npx expo prebuild --platform android   # or: npx expo run:android
 in to Firebase Installation IDs. **It must be the app's only FCM message handler**: don't use
 `expo-notifications` remote push or `@react-native-firebase/messaging` in the same app, because
 Android delivers each FCM message to only one service.
+
+### Bare React Native
+
+Apps without Expo's tooling (React Native 0.88+, created with `@react-native-community/cli`)
+use the same module once Expo modules are installed:
+
+1. Install Expo modules (adds the `expo` package and its Gradle setup):
+
+   ```sh
+   npx install-expo-modules@latest
+   ```
+
+   With npm, `@expo/cli` can end up under `node_modules/expo/node_modules`, and JS bundling
+   (release builds) then fails with `property 'cliFile' ... is not a file`. If so, change the
+   `cliFile` line it added to `android/app/build.gradle` to resolve the CLI from `expo`, as
+   Expo's own template does:
+
+   ```groovy
+   cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+   ```
+
+2. Install the module: `npm install @pushharbor/expo`.
+3. Set up Firebase by hand (Expo's `googleServicesFile` config is not used): put
+   `google-services.json` in `android/app/`, add the Google services plugin to the
+   `buildscript` dependencies in `android/build.gradle`:
+
+   ```groovy
+   classpath("com.google.gms:google-services:4.4.4")
+   ```
+
+   and apply it in `android/app/build.gradle`, below the other plugins:
+
+   ```groovy
+   apply plugin: "com.google.gms.google-services"
+   ```
+
+4. Build as usual (`npx react-native run-android`). The JavaScript API below is the same.
 
 ## Register a device
 

@@ -102,7 +102,7 @@ That's the whole integration. No SDK on the server, no account, no keys to distr
 | Relay, container | `docker pull ghcr.io/singh-gur/pushharbor-native:0.1.0` |
 | Relay, binary | `cargo install pushharbor-native` |
 | Relay, Cloudflare Workers | deploy from [`crates/worker`](docs/deploy.md#cloudflare-workers) |
-| App module | `npx expo install @pushharbor/expo` |
+| App module | `npx expo install @pushharbor/expo` (bare React Native: [steps](docs/expo.md#bare-react-native)) |
 | Android library (Kotlin/Java) | from source for now ([guide](docs/android.md#install)) |
 | Protocol library (Rust) | `cargo add pushharbor-core` |
 
