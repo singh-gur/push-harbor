@@ -99,20 +99,20 @@ first (permanent) publish with v0.2.0.
 
 ### Phase 3: v0.2.0 release
 
-- Status: In Progress
+- Status: Complete
 - Prerequisites: Phase 2 dry run passed
 
-- [ ] Bump to 0.2.0: `Cargo.toml` workspace version, `crates/native/Cargo.toml` and
+- [x] Bump to 0.2.0: `Cargo.toml` workspace version, `crates/native/Cargo.toml` and
   `crates/worker/Cargo.toml` `pushharbor-core` versions, `Cargo.lock` (via cargo),
   `packages/expo` (`npm version 0.2.0 --no-git-tag-version`), `packages/expo/android/build.gradle`
   (`version`, `versionName`), `VERSION_NAME`, `deploy/helm/pushharbor/Chart.yaml`
   (`version`, `appVersion`), `deploy/cloudrun/service.yaml` image tag, `docs/deploy.md` pin
   example, README image tag and Releases row.
-- [ ] Docs: `docs/android.md` Install uses `implementation("io.github.singh-gur:pushharbor-android:0.2.0")`
+- [x] Docs: `docs/android.md` Install uses `implementation("io.github.singh-gur:pushharbor-android:0.2.0")`
   (keep source include as an alternative) and lists the signing key fingerprint; README install row.
-- [ ] Verify locally: `scripts/check-release-version.sh v0.2.0`, `just ci`, `just test-android`,
+- [x] Verify locally: `scripts/check-release-version.sh v0.2.0`, `just ci`, `just test-android`,
   `just test-expo`; push; CI green.
-- [ ] Owner tags `v0.2.0` and approves; verify repo1 serves the POM and a fresh Gradle project
+- [x] Owner tags `v0.2.0` and approves; verify repo1 serves the POM and a fresh Gradle project
   resolves the dependency; npm, crates, image released.
 
 ## Phase Dependencies
