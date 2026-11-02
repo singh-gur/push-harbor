@@ -90,8 +90,9 @@ first (permanent) publish with v0.2.0.
 - `maven-publish`: `needs: maven-pack`, same `if`, `environment: release`, `contents: read`;
   inputs via `env:` only (no `${{ }}` inside `run`). Script: version from the bundle folder; skip
   real runs if on repo1; temp `GNUPGHOME`; import key; delete `maven-metadata.xml*`; sign all
-  non-checksum files; zip; `::add-mask::` the bearer token; upload; poll 15 s up to 30 min.
-  Real: PUBLISHED → ok, PUBLISHING at timeout → ok with note, FAILED → print `errors`, exit 1.
+  non-checksum files; zip; `::add-mask::` the bearer token; upload; poll 15 s up to 10 min.
+  Real: PUBLISHING or PUBLISHED → ok (Central finishes publishing on its own; changed after
+  v0.2.0, where waiting for PUBLISHED took 6 min for nothing), FAILED → print `errors`, exit 1.
   Dry run: VALIDATED → DELETE (expect 204) → ok; FAILED → print errors, keep, exit 1.
 - [x] Implement; push; owner starts "Release" manually with `maven_dry_run` and approves.
 - [x] Verify: run log shows `VALIDATED` and DELETE 204.

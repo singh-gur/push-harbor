@@ -237,16 +237,19 @@ jobs:
             "$api/upload?publishingType=$type&name=pushharbor-android-$version")
           echo "pushharbor-android $version: deployment $id ($type)"
 
-          # Validation takes minutes; publishing to Maven Central can take up to ~30 min.
+          # Wait only for validation (seconds to minutes), so a rejected bundle fails the job. Once
+          # PUBLISHING, Central finishes on its own (up to ~30 min) and nothing else can fail here.
           state=PENDING
-          for _ in $(seq 120); do
+          for _ in $(seq 40); do
             sleep 15
             status=$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $token" "$api/status?id=$id")
             state=$(jq -r .deploymentState <<<"$status")
             echo "state: $state"
             case "$state" in
               FAILED) jq .errors <<<"$status"; exit 1 ;;
-              PUBLISHED) exit 0 ;;
+              PUBLISHING | PUBLISHED)
+                echo "validated; live on Maven Central within ~30 min: https://central.sonatype.com/artifact/io.github.singh-gur/pushharbor-android/$version"
+                exit 0 ;;
               VALIDATED)
                 if [ "$DRY_RUN" = true ]; then
                   curl -sS --fail-with-body -X DELETE -H "Authorization: Bearer $token" "$api/deployment/$id"
@@ -254,7 +257,4 @@ jobs:
                 fi ;;
             esac
           done
-          if [ "$state" = PUBLISHING ]; then
-            echo "still publishing after 30 min; see https://central.sonatype.com/publishing/deployments"; exit 0
-          fi
-          echo "timed out in state $state"; exit 1
+          echo "still $state after 10 min; see https://central.sonatype.com/publishing/deployments"; exit 1
