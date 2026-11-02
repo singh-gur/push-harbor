@@ -1,0 +1,56 @@
+// Maven Central publication, applied only to the standalone build (see build.gradle). Builds an
+// unsigned bundle in Maven repository layout under build/central-bundle; the release workflow
+// signs and uploads it (.github/workflows/release.yml, maven-publish job).
+apply plugin: 'maven-publish'
+
+group = 'io.github.singh-gur'
+version = findProperty('VERSION_NAME')
+
+android {
+  publishing {
+    singleVariant('release') {
+      withSourcesJar()
+      withJavadocJar()
+    }
+  }
+}
+
+afterEvaluate {
+  publishing {
+    publications {
+      release(MavenPublication) {
+        from components.release
+        artifactId = 'pushharbor-android'
+        pom {
+          name = 'pushharbor-android'
+          description = 'Pushharbor client for Android: end-to-end encrypted Web Push through a Pushharbor relay'
+          url = 'https://github.com/singh-gur/push-harbor'
+          licenses {
+            license {
+              name = 'MIT License'
+              url = 'https://opensource.org/licenses/MIT'
+            }
+          }
+          developers {
+            developer {
+              id = 'singh-gur'
+              name = 'Gurbakhshish Singh'
+              url = 'https://github.com/singh-gur'
+            }
+          }
+          scm {
+            url = 'https://github.com/singh-gur/push-harbor'
+            connection = 'scm:git:https://github.com/singh-gur/push-harbor.git'
+            developerConnection = 'scm:git:ssh://git@github.com/singh-gur/push-harbor.git'
+          }
+        }
+      }
+    }
+    repositories {
+      maven {
+        name = 'bundle'
+        url = layout.buildDirectory.dir('central-bundle')
+      }
+    }
+  }
+}

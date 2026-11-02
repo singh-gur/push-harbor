@@ -38,3 +38,6 @@ dependencies {
   // Android's org.json is a stub in local unit tests.
   testImplementation 'org.json:json:20260814'
 }
+
+// Maven Central publishing, only when built on its own (never inside an app that includes this file).
+if (project == rootProject) apply from: "publish.gradle"

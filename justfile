@@ -189,6 +189,11 @@ test-android:
     cd examples/android && { [ -f app/google-services.json ] || cp app/google-services.placeholder.json app/google-services.json; } \
       && ./gradlew -q :app:assembleDebug
 
+# Android library's Maven Central bundle (unsigned; the release workflow signs and uploads it).
+android-bundle:
+    cd packages/android && rm -rf build/central-bundle && ./gradlew -q publishReleasePublicationToBundleRepository
+    cd packages/android/build/central-bundle && find . -type f | sort
+
 # Build the Expo module with the bundled Android library through the example app, and check the
 # npm package carries the library (android-lib/). Kotlin unit tests run in packages/android.
 # Without examples/expo/google-services.json a placeholder is used (enough to build, not to receive pushes).
