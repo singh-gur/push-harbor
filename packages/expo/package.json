@@ -9,11 +9,13 @@
     "build",
     "android/build.gradle",
     "android/src/main",
+    "android-lib/build.gradle",
+    "android-lib/src/main",
     "expo-module.config.json"
   ],
   "scripts": {
     "build": "tsc",
-    "prepare": "tsc"
+    "prepare": "node scripts/sync-android.mjs && tsc"
   },
   "keywords": [
     "expo",

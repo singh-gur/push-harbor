@@ -2,3 +2,5 @@ node_modules/
 build/
 android/build/
 android/.gradle/
+# Copy of packages/android, made by scripts/sync-android.mjs on prepare.
+android-lib/

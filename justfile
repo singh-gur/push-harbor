@@ -182,13 +182,15 @@ run-native *args:
 # Everything CI runs
 ci: lint audit test test-wasm build-wasm
 
-# Build the Expo module and run its Kotlin unit tests (spec vectors) through the example app.
+# Build the Expo module with the bundled Android library through the example app, and check the
+# npm package carries the library (android-lib/). Kotlin unit tests run in packages/android.
 # Without examples/expo/google-services.json a placeholder is used (enough to build, not to receive pushes).
 test-expo:
-    cd packages/expo && npm ci --silent && npx tsc
+    cd packages/expo && npm ci --silent && npx tsc \
+      && npm pack --dry-run 2>&1 | grep -q 'android-lib/src/main/java/io/github/singhgur/pushharbor/Registrar.kt'
     cd examples/expo && npm ci --silent && { [ -f google-services.json ] || cp google-services.placeholder.json google-services.json; } \
       && npx tsc --noEmit && npx expo prebuild --platform android --clean > /dev/null
-    cd examples/expo/android && ./gradlew -q :pushharbor-expo:testDebugUnitTest
+    cd examples/expo/android && ./gradlew -q :pushharbor-expo:assembleDebug
 
 # Native relay with real FCM for the example app on an emulator or USB device: run it, then
 # `adb reverse tcp:8080 tcp:8080` and register with relay URL http://127.0.0.1:8080.

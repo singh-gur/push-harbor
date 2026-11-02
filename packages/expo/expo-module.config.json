@@ -1,6 +1,7 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["dev.pushharbor.expo.PushharborModule"]
+    "modules": ["dev.pushharbor.expo.PushharborModule"],
+    "projects": [{ "name": "pushharbor-android", "path": "android-lib" }]
   }
 }

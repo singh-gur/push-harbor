@@ -4,7 +4,7 @@
   "scripts": {
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android --clean",
-    "test:android": "cd android && ./gradlew :pushharbor-expo:testDebugUnitTest"
+    "test:android": "cd android && ./gradlew :pushharbor-expo:assembleDebug"
   },
   "license": "MIT",
   "type": "commonjs",

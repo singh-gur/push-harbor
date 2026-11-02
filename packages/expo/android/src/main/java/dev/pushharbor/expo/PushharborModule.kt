@@ -2,69 +2,57 @@ package dev.pushharbor.expo
 
 import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
-import androidx.core.content.ContextCompat
-import expo.modules.interfaces.permissions.Permissions
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.lang.ref.WeakReference
-import java.net.InetAddress
-import java.net.URL
+import io.github.singhgur.pushharbor.MessageListener
+import io.github.singhgur.pushharbor.PushSubscription
+import io.github.singhgur.pushharbor.Pushharbor
+import io.github.singhgur.pushharbor.PushharborException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 
+/** JS bridge over the pushharbor-android library (bundled as Gradle project :pushharbor-android). */
 class PushharborModule : Module() {
   private val context: Context get() = requireNotNull(appContext.reactContext).applicationContext
+
+  /** Delivers decrypted messages to JS while the app is running; otherwise they are only shown. */
+  private val listener = MessageListener { m ->
+    sendEvent("onMessage", mapOf("title" to m.title, "body" to m.body, "url" to m.url, "tag" to m.tag, "data" to m.data))
+  }
 
   override fun definition() = ModuleDefinition {
     Name("Pushharbor")
     Events("onMessage")
 
     OnCreate {
-      active = WeakReference(this@PushharborModule)
+      Pushharbor.addMessageListener(listener)
       // Catch target changes that happened while the app was not running.
-      val context = appContext.reactContext?.applicationContext ?: return@OnCreate
-      Registrar.executor.execute {
-        try {
-          Registrar.rotate(context, Registrar.currentTarget())
-        } catch (e: Exception) {
-          Log.w("Pushharbor", "target check failed: ${e.javaClass.simpleName}")
-        }
-      }
+      appContext.reactContext?.let { Pushharbor.refreshTarget(it) }
     }
 
     OnDestroy {
-      if (active?.get() === this@PushharborModule) active = null
+      Pushharbor.removeMessageListener(listener)
     }
 
     AsyncFunction("register") { relayUrl: String, senderKey: String, promise: Promise ->
-      val context = context
-      if (needsLocalNetworkPermission(context, relayUrl)) {
+      if (Pushharbor.needsLocalNetworkPermission(context, relayUrl)) {
         return@AsyncFunction promise.reject(
-          "ERR_LOCAL_NETWORK",
+          PushharborException.ERR_LOCAL_NETWORK,
           "The relay is on a local network: call requestLocalNetworkPermission() first",
           null,
         )
       }
-      Registrar.executor.execute {
-        settle(promise) { toJs(Registrar.register(context, relayUrl, senderKey)) }
-      }
+      settle(promise, Pushharbor.registerAsync(context, relayUrl, senderKey), ::toJs)
     }
 
     AsyncFunction("getSubscriptions") { promise: Promise ->
-      val context = context
-      Registrar.executor.execute {
-        // Subscriptions whose keys can't be unwrapped (data restored elsewhere) are useless.
-        settle(promise) {
-          Subscriptions.all(context).filter { Subscriptions.secrets(it) != null }.map(::toJs)
-        }
-      }
+      settle(promise, Pushharbor.subscriptionsAsync(context)) { it.map(::toJs) }
     }
 
     AsyncFunction("unregister") { id: String, promise: Promise ->
-      val context = context
-      Registrar.executor.execute { settle(promise) { Registrar.unregister(context, id) } }
+      settle(promise, Pushharbor.unregisterAsync(context, id)) { null }
     }
 
     AsyncFunction("requestNotificationPermission") { promise: Promise ->
@@ -74,7 +62,7 @@ class PushharborModule : Module() {
 
     AsyncFunction("requestLocalNetworkPermission") { promise: Promise ->
       if (Build.VERSION.SDK_INT < LOCAL_NETWORK_SDK) return@AsyncFunction promise.resolve(true)
-      ask(promise, LOCAL_NETWORK_PERMISSION)
+      ask(promise, Pushharbor.LOCAL_NETWORK_PERMISSION)
     }
   }
 
@@ -83,52 +71,31 @@ class PushharborModule : Module() {
     permissions.askForPermissions({ result -> promise.resolve(result[permission]?.status?.name == "GRANTED") }, permission)
   }
 
-  private fun settle(promise: Promise, block: () -> Any?) {
-    try {
-      promise.resolve(block())
-    } catch (e: PushharborException) {
-      promise.reject(e.code, e.message, null)
-    } catch (e: Exception) {
-      promise.reject("ERR_PUSHHARBOR", e.javaClass.simpleName, null)
+  private fun <T> settle(promise: Promise, future: CompletableFuture<T>, toJs: (T) -> Any?) {
+    future.whenComplete { value, error ->
+      if (error == null) {
+        promise.resolve(toJs(value))
+      } else {
+        val cause = (error as? CompletionException)?.cause ?: error
+        if (cause is PushharborException) {
+          promise.reject(cause.code, cause.message, null)
+        } else {
+          promise.reject(PushharborException.ERR_PUSHHARBOR, cause.javaClass.simpleName, null)
+        }
+      }
     }
   }
 
   /** The Web Push subscription the app hands to its server, plus the ID to unregister it. */
-  private fun toJs(s: Subscription): Map<String, Any?> {
-    val auth = Subscriptions.secrets(s)?.auth ?: throw PushharborException("ERR_KEYS", "subscription keys unavailable")
-    return mapOf(
-      "id" to s.keyId,
-      "endpoint" to s.endpoint,
-      "expirationTime" to null,
-      "keys" to mapOf("p256dh" to s.p256dh, "auth" to b64url(auth)),
-    )
-  }
+  private fun toJs(s: PushSubscription): Map<String, Any?> = mapOf(
+    "id" to s.id,
+    "endpoint" to s.endpoint,
+    "expirationTime" to null,
+    "keys" to mapOf("p256dh" to s.p256dh, "auth" to s.auth),
+  )
 
   companion object {
     /** Android 17 protects local-network access behind a runtime permission (PH-18). */
     private const val LOCAL_NETWORK_SDK = 37
-    private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
-
-    @Volatile
-    private var active: WeakReference<PushharborModule>? = null
-
-    /** Delivers a decrypted message to JS if the app is running; otherwise it is only shown. */
-    fun emit(envelope: Envelope) {
-      val module = active?.get() ?: return
-      module.sendEvent(
-        "onMessage",
-        mapOf("title" to envelope.title, "body" to envelope.body, "url" to envelope.url, "tag" to envelope.tag, "data" to envelope.data),
-      )
-    }
-
-    private fun needsLocalNetworkPermission(context: Context, relayUrl: String): Boolean {
-      if (Build.VERSION.SDK_INT < LOCAL_NETWORK_SDK) return false
-      if (ContextCompat.checkSelfPermission(context, LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED) return false
-      // Literal addresses only: resolving names here would block; private DNS names are the app's call.
-      val host = runCatching { URL(relayUrl).host }.getOrNull() ?: return false
-      if (!host.all { it.isDigit() || it == '.' || it == ':' }) return false
-      val address = runCatching { InetAddress.getByName(host) }.getOrNull() ?: return false
-      return address.isSiteLocalAddress || address.isLinkLocalAddress
-    }
   }
 }

@@ -141,7 +141,7 @@ Outputs: `packages/android/`, updated `scripts/check-logging.py`.
 ### Phase 2: Expo module as thin wrapper
 
 - Objective: Expo module depends on the bundled library; JS API unchanged.
-- Status: In Progress
+- Status: Complete
 - Complexity: Medium
 - Estimated Time: 45–60 min
 - Prerequisites: Phase 1
@@ -157,15 +157,15 @@ Outputs: `packages/android/`, updated `scripts/check-logging.py`.
 | `justfile` `test-expo`, `examples/expo/package.json` `test:android` | modify | Run `:pushharbor-expo:assembleDebug` (unit tests are not bundled in `android-lib`; they run in `packages/android`) |
 
 Implementation Tasks:
-- [ ] Before changes: build and install the current Expo example on the emulator, register against `just example-relay`, keep the subscription (upgrade check baseline).
-- [ ] Add sync script, config, Gradle wiring; confirm with `./gradlew projects` in `examples/expo/android` that the project is `:pushharbor-android` (use the listed name otherwise).
-- [ ] Rewrite `PushharborModule` on the public API; delete moved files.
-- [ ] Update `test-expo` and the example script; add an `npm pack --dry-run` check for `android-lib/src/main/java/io/github/singhgur/pushharbor/Registrar.kt` to `test-expo`.
+- [x] Before changes: build and install the current Expo example on the emulator, register against `just example-relay`, keep the subscription (upgrade check baseline).
+- [x] Add sync script, config, Gradle wiring; confirm with `./gradlew projects` in `examples/expo/android` that the project is `:pushharbor-android` (use the listed name otherwise).
+- [x] Rewrite `PushharborModule` on the public API; delete moved files.
+- [x] Update `test-expo` and the example script; add an `npm pack --dry-run` check for `android-lib/src/main/java/io/github/singhgur/pushharbor/Registrar.kt` to `test-expo`.
 
 Verification:
-- [ ] `just test-expo` passes.
-- [ ] `git diff --stat packages/expo/src` is empty.
-- [ ] Upgrade check: `adb install -r` the new build; the old subscription is still listed and a push sent to it is shown.
+- [x] `just test-expo` passes.
+- [x] `git diff --stat packages/expo/src` is empty.
+- [x] Upgrade check: `adb install -r` the new build; the old subscription is still listed and a push sent to it is shown.
 
 Completion Gate: user confirms Phase 2.
 Outputs: slim `packages/expo`, updated `justfile`.
@@ -173,7 +173,7 @@ Outputs: slim `packages/expo`, updated `justfile`.
 ### Phase 3: Native example, CI, docs
 
 - Objective: native example app, CI job, documentation.
-- Status: Not Started
+- Status: In Progress
 - Complexity: Medium
 - Estimated Time: 60–90 min
 - Prerequisites: Phase 1
