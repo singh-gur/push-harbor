@@ -1,17 +1,26 @@
 name: Release
 
 # On a version tag (v0.1.0): the container image to GHCR (:0.1.0, :0.1, :latest), the crates
-# pushharbor-core and pushharbor-native to crates.io, and @pushharbor/expo to npm. Registry
-# publishing uses trusted publishing (OIDC, no stored tokens) and waits for approval in the
-# `release` environment. Versions already on a registry are skipped, so re-running is safe.
-# Manual runs only build the image, without pushing it.
+# pushharbor-core and pushharbor-native to crates.io, @pushharbor/expo to npm, and
+# io.github.singh-gur:pushharbor-android to Maven Central. crates.io and npm use trusted
+# publishing (OIDC, no stored tokens); Maven Central has none, so it uses the user token and PGP
+# key stored as `release` environment secrets. Publishing waits for approval in the `release`
+# environment. Versions already on a registry are skipped, so re-running is safe.
+# Manual runs only build the image, without pushing it; with `maven_dry_run` they also upload the
+# Android library to Maven Central under a throwaway -dryrun version, wait for validation and
+# drop it again (nothing is published).
 #
 # Jobs that can publish never install or compile third-party code (no npm install scripts, no
-# build.rs): unprivileged jobs build and verify, the publish jobs only upload the result.
+# build.rs, no Gradle): unprivileged jobs build and verify, the publish jobs only sign and upload.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      maven_dry_run:
+        description: Upload the Android library to Maven Central for validation only, then drop it
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -145,3 +154,105 @@ jobs:
           else
             npm publish "./pushharbor-expo-$version.tgz"
           fi
+
+  # Unprivileged: build the Android library's Maven bundle with Gradle (unsigned; this compiles
+  # dependencies). A dry run builds a throwaway <version>-dryrun.<run> instead.
+  maven-pack:
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.maven_dry_run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - if: startsWith(github.ref, 'refs/tags/v')
+        run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
+      - name: Build the bundle
+        working-directory: packages/android
+        env:
+          DRY_RUN: ${{ inputs.maven_dry_run }}
+        run: |
+          version=$(sed -n 's/^VERSION_NAME=//p' gradle.properties)
+          if [ "$DRY_RUN" = true ]; then version="$version-dryrun.$GITHUB_RUN_NUMBER"; fi
+          ./gradlew -q publishReleasePublicationToBundleRepository "-PVERSION_NAME=$version"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: maven-bundle
+          path: packages/android/build/central-bundle
+          if-no-files-found: error
+
+  # Signs the bundle with the release key and uploads it through the Central Portal API
+  # (central.sonatype.org/publish/publish-portal-api). Only runner tools: gpg, zip, curl, jq.
+  maven-publish:
+    needs: maven-pack
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.maven_dry_run
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: maven-bundle
+          path: bundle
+      - name: Sign, upload and publish (skipping a version already on Maven Central)
+        env:
+          DRY_RUN: ${{ inputs.maven_dry_run }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          path=io/github/singh-gur/pushharbor-android
+          version=$(find "bundle/$path" -mindepth 1 -maxdepth 1 -type d -printf '%f\n')
+          [ "$(printf '%s\n' "$version" | wc -l)" = 1 ] || { echo "expected one version in the bundle: $version"; exit 1; }
+          if [ "$DRY_RUN" != true ] &&
+            curl -sfI "https://repo1.maven.org/maven2/$path/$version/pushharbor-android-$version.pom" >/dev/null; then
+            echo "pushharbor-android $version already published"; exit 0
+          fi
+
+          # Every file needs an .asc signature; checksums need none. Central rejects maven-metadata.
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          rm -f "bundle/$path"/maven-metadata.xml*
+          find bundle -type f ! -name '*.md5' ! -name '*.sha1' ! -name '*.sha256' ! -name '*.sha512' -print0 |
+            while IFS= read -r -d '' f; do
+              printf '%s' "$GPG_PASSPHRASE" |
+                gpg --batch --quiet --yes --pinentry-mode loopback --passphrase-fd 0 --armor --detach-sign "$f"
+            done
+          (cd bundle && zip -qr ../central-bundle.zip .)
+
+          token=$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 -w0)
+          echo "::add-mask::$token"
+          api=https://central.sonatype.com/api/v1/publisher
+          if [ "$DRY_RUN" = true ]; then type=USER_MANAGED; else type=AUTOMATIC; fi
+          id=$(curl -sS --fail-with-body -H "Authorization: Bearer $token" -F "bundle=@central-bundle.zip" \
+            "$api/upload?publishingType=$type&name=pushharbor-android-$version")
+          echo "pushharbor-android $version: deployment $id ($type)"
+
+          # Validation takes minutes; publishing to Maven Central can take up to ~30 min.
+          state=PENDING
+          for _ in $(seq 120); do
+            sleep 15
+            status=$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $token" "$api/status?id=$id")
+            state=$(jq -r .deploymentState <<<"$status")
+            echo "state: $state"
+            case "$state" in
+              FAILED) jq .errors <<<"$status"; exit 1 ;;
+              PUBLISHED) exit 0 ;;
+              VALIDATED)
+                if [ "$DRY_RUN" = true ]; then
+                  curl -sS --fail-with-body -X DELETE -H "Authorization: Bearer $token" "$api/deployment/$id"
+                  echo "dry run passed validation; deployment dropped"; exit 0
+                fi ;;
+            esac
+          done
+          if [ "$state" = PUBLISHING ]; then
+            echo "still publishing after 30 min; see https://central.sonatype.com/publishing/deployments"; exit 0
+          fi
+          echo "timed out in state $state"; exit 1

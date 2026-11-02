@@ -93,7 +93,7 @@ first (permanent) publish with v0.2.0.
   non-checksum files; zip; `::add-mask::` the bearer token; upload; poll 15 s up to 30 min.
   Real: PUBLISHED → ok, PUBLISHING at timeout → ok with note, FAILED → print `errors`, exit 1.
   Dry run: VALIDATED → DELETE (expect 204) → ok; FAILED → print errors, keep, exit 1.
-- [ ] Implement; push; owner starts "Release" manually with `maven_dry_run` and approves.
+- [x] Implement; push; owner starts "Release" manually with `maven_dry_run` and approves.
 - [ ] Verify: run log shows `VALIDATED` and DELETE 204.
 
 ### Phase 3: v0.2.0 release
