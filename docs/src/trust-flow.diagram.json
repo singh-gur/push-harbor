@@ -1,120 +1,214 @@
 {
   "title": "Pushharbor: who can send to a device",
-  "subtitle": "Servers have no accounts; each endpoint accepts only the key its app bound at registration",
+  "subtitle": "No sender accounts: each endpoint accepts only the server key its app chose",
   "style": "clean",
   "iconsDir": "../assets/icons",
   "nodes": [
     {
-      "id": "app",
+      "id": "server_a",
       "col": 0,
-      "row": 0,
-      "kind": "client",
-      "label": "App on the device",
-      "sublabel": "starts registration, decrypts",
-      "icon": "mdi--cellphone.svg"
-    },
-    {
-      "id": "server",
-      "col": 2,
       "row": 0,
       "kind": "service",
       "label": "User's server",
-      "sublabel": "holds the VAPID private key",
+      "sublabel": "has a VAPID key pair",
       "icon": "mdi--server.svg"
     },
     {
-      "id": "fcm",
-      "col": 0,
-      "row": 1,
-      "kind": "external",
-      "label": "FCM",
-      "sublabel": "your Firebase project only",
-      "icon": "simple-icons--firebase.svg"
+      "id": "app_a",
+      "col": 1,
+      "row": 0,
+      "kind": "client",
+      "label": "App",
+      "sublabel": "gets the server's key",
+      "icon": "mdi--cellphone.svg"
     },
     {
-      "id": "relay",
+      "id": "relay_a",
+      "col": 2,
+      "row": 0,
+      "kind": "accent",
+      "label": "Pushharbor relay",
+      "sublabel": "locks endpoint to that key",
+      "icon": "mdi--transit-connection-variant.svg"
+    },
+    {
+      "id": "app_a2",
+      "col": 3,
+      "row": 0,
+      "kind": "client",
+      "label": "App",
+      "sublabel": "receives the endpoint",
+      "icon": "mdi--cellphone.svg"
+    },
+    {
+      "id": "server_a2",
+      "col": 4,
+      "row": 0,
+      "kind": "service",
+      "label": "User's server",
+      "sublabel": "stores the endpoint",
+      "icon": "mdi--server.svg"
+    },
+    {
+      "id": "server_b",
+      "col": 0,
+      "row": 1,
+      "kind": "service",
+      "label": "User's server",
+      "sublabel": "signs with its private key",
+      "icon": "mdi--server.svg"
+    },
+    {
+      "id": "relay_b",
       "col": 1,
       "row": 1,
       "kind": "accent",
       "label": "Pushharbor relay",
-      "sublabel": "endpoint bound to one key",
+      "sublabel": "checks the key, can't decrypt",
       "icon": "mdi--transit-connection-variant.svg"
     },
     {
-      "id": "foreign",
+      "id": "fcm_b",
       "col": 2,
       "row": 1,
+      "kind": "external",
+      "label": "FCM",
+      "sublabel": "your Firebase project",
+      "icon": "simple-icons--firebase.svg"
+    },
+    {
+      "id": "app_b",
+      "col": 3,
+      "row": 1,
+      "kind": "client",
+      "label": "App",
+      "sublabel": "decrypts and shows it",
+      "icon": "mdi--cellphone.svg"
+    },
+    {
+      "id": "other_c",
+      "col": 0,
+      "row": 2,
       "label": "Any other server",
-      "sublabel": "not given this endpoint",
+      "sublabel": "has the URL, not the key",
       "icon": "mdi--server-off.svg",
+      "fill": "#ffe3e3",
+      "stroke": "#c92a2a"
+    },
+    {
+      "id": "relay_c",
+      "col": 1,
+      "row": 2,
+      "label": "Pushharbor relay",
+      "sublabel": "403: not the locked key",
+      "icon": "mdi--transit-connection-variant.svg",
       "fill": "#ffe3e3",
       "stroke": "#c92a2a"
     }
   ],
+  "groups": [
+    {
+      "id": "setup",
+      "title": "A. Once per device: the app picks its server",
+      "kind": "zone",
+      "cols": [
+        0,
+        4
+      ],
+      "rows": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "send",
+      "title": "B. Every notification",
+      "kind": "zone",
+      "cols": [
+        0,
+        4
+      ],
+      "rows": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "blocked",
+      "title": "C. Any other server",
+      "kind": "zone",
+      "cols": [
+        0,
+        4
+      ],
+      "rows": [
+        2,
+        2
+      ]
+    }
+  ],
   "edges": [
     {
-      "from": "server",
-      "to": "app",
-      "label": "1 VAPID public key / 5 subscription",
-      "bidirectional": true
+      "from": "server_a",
+      "to": "app_a",
+      "label": "1 public key"
     },
     {
-      "from": "app",
-      "to": "relay",
-      "label": "2 register / 4 confirm",
-      "bidirectional": true,
-      "fromSide": "right",
-      "toSide": "top"
+      "from": "app_a",
+      "to": "relay_a",
+      "label": "2 register"
     },
     {
-      "from": "server",
-      "to": "relay",
-      "label": "6 Web Push, bound key",
-      "kind": "secure",
-      "fromSide": "left",
-      "toSide": "top"
+      "from": "relay_a",
+      "to": "app_a2",
+      "label": "3 endpoint"
     },
     {
-      "from": "relay",
-      "to": "fcm",
-      "label": "3 challenge / 7 ciphertext",
-      "kind": "data",
-      "fromSide": "left",
-      "toSide": "right"
+      "from": "app_a2",
+      "to": "server_a2",
+      "label": "4 endpoint"
     },
     {
-      "from": "fcm",
-      "to": "app",
-      "label": "3 challenge / 7 notification",
-      "kind": "data",
-      "fromSide": "top",
-      "toSide": "bottom"
+      "from": "server_b",
+      "to": "relay_b",
+      "label": "5 signed send",
+      "kind": "secure"
     },
     {
-      "from": "foreign",
-      "to": "relay",
-      "label": "403: key not bound",
+      "from": "relay_b",
+      "to": "fcm_b",
+      "label": "6 ciphertext",
+      "kind": "data"
+    },
+    {
+      "from": "fcm_b",
+      "to": "app_b",
+      "label": "7 push",
+      "kind": "data"
+    },
+    {
+      "from": "other_c",
+      "to": "relay_c",
+      "label": "send, wrong key",
       "color": "#c92a2a",
       "labelColor": "#c92a2a",
-      "strokeStyle": "dashed",
-      "fromSide": "left",
-      "toSide": "right"
+      "strokeStyle": "dashed"
     }
   ],
   "legend": [
     {
       "edgeKind": "secure",
-      "label": "Signed by the bound VAPID key"
+      "label": "Signed with the server's VAPID private key"
     },
     {
       "edgeKind": "data",
-      "label": "Through FCM"
+      "label": "End-to-end encrypted payload"
     }
   ],
-  "note": "The app answers only challenges for registrations it started, so knowing a device's FID is not enough to register it. Anything without the bound key is rejected.",
+  "note": "Step 2 includes a challenge push the app must answer, so nobody can register someone else's phone. Step 5 must be signed by the key locked in step 2.",
   "layout": {
-    "laneStep": 48,
-    "colGap": 200,
-    "nodeWidth": 230
+    "colGap": 130,
+    "rowGap": 30,
+    "laneStep": 24
   }
 }

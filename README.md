@@ -63,24 +63,27 @@ through FCM to the device](docs/assets/architecture.png)
 
 ## Who can send through your relay
 
-![Who can send to a device: the app gets its server's VAPID public key, registers with the relay
-and confirms a challenge push, then gives the server its subscription; only Web Push signed by the
-bound key is forwarded, any other server gets 403](docs/assets/trust-flow.png)
+![Who can send to a device: once per device, the app gets its server's public key, registers it
+with the relay and hands the resulting endpoint to the server; every notification is signed by
+that key and forwarded through FCM; any other server gets 403](docs/assets/trust-flow.png)
 
-Servers never sign up, so the relay doesn't decide which servers may use it. Each device decides
-who can reach it:
+The relay has no sender accounts. Each phone decides which server may reach it.
 
-- **1-5: the app chooses its sender.** It binds its endpoint to the VAPID public key of the
-  server the user signed in to, and proves it receives pushes by answering a challenge sent
-  through FCM. It answers only registrations it started itself, so knowing a device's FID is not
-  enough to register it.
-- **6-7: the relay checks the key.** A send must be signed by the key bound to that endpoint;
-  anything else gets 401 or 403, even with the endpoint URL.
-- **Only your app can be reached.** The relay pushes with your Firebase credentials, so it can
-  only reach installs of your app.
-- **What it doesn't stop:** any install of your app can bind any server's key, so any Web Push
-  sender the user picks can use your relay, within your rate limits
-  (`PUSHHARBOR_LIMIT_<NAME>`, see [deploy](docs/deploy.md)).
+- **A. Setup, once per device.** The app gets the public key of the server the user signed in
+  to and registers it with the relay. The relay creates an endpoint locked to that key, and the
+  app hands it to the server.
+- **B. Every notification.** The server signs the request with its private key. The relay
+  checks the signature against the locked key and forwards the still-encrypted message through
+  FCM.
+- **C. Any other server** is rejected with `403`, even if it knows the endpoint URL.
+
+Two more guarantees: registering needs a challenge push answered on the phone, so nobody can
+register someone else's device; and the relay sends with your Firebase credentials, so it only
+ever reaches your app.
+
+**Not prevented:** the relay can't tell your server software from any other Web Push sender. If
+a user points your app at another server, that server can send to that user's phone. Rate limits
+(`PUSHHARBOR_LIMIT_<NAME>`, see [deploy](docs/deploy.md)) cap the volume.
 
 ## Three steps to your first notification
 

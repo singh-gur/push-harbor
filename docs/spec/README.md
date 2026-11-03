@@ -42,6 +42,9 @@ SHOULD and MAY are used as in RFC 2119.
    bound to the endpoint and forwards the ciphertext to the device.
 5. The app decrypts the payload on the device and shows it. Anything that fails is dropped.
 
+Who can send, and what a server without the bound key gets:
+[trust-flow diagram](../assets/trust-flow.png).
+
 ## Conventions
 
 - **base64url** means RFC 4648 section 5 without padding. Receivers MUST accept padded values
