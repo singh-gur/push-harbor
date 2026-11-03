@@ -61,6 +61,27 @@ through FCM to the device](docs/assets/architecture.png)
 4. **The relay checks** the sender's signature and forwards the ciphertext through FCM.
 5. **The phone decrypts** and shows the notification, even if the app was closed.
 
+## Who can send through your relay
+
+![Who can send to a device: the app gets its server's VAPID public key, registers with the relay
+and confirms a challenge push, then gives the server its subscription; only Web Push signed by the
+bound key is forwarded, any other server gets 403](docs/assets/trust-flow.png)
+
+Servers never sign up, so the relay doesn't decide which servers may use it. Each device decides
+who can reach it:
+
+- **1-5: the app chooses its sender.** It binds its endpoint to the VAPID public key of the
+  server the user signed in to, and proves it receives pushes by answering a challenge sent
+  through FCM. It answers only registrations it started itself, so knowing a device's FID is not
+  enough to register it.
+- **6-7: the relay checks the key.** A send must be signed by the key bound to that endpoint;
+  anything else gets 401 or 403, even with the endpoint URL.
+- **Only your app can be reached.** The relay pushes with your Firebase credentials, so it can
+  only reach installs of your app.
+- **What it doesn't stop:** any install of your app can bind any server's key, so any Web Push
+  sender the user picks can use your relay, within your rate limits
+  (`PUSHHARBOR_LIMIT_<NAME>`, see [deploy](docs/deploy.md)).
+
 ## Three steps to your first notification
 
 **1. Deploy the relay once, for your app** ([guide](docs/deploy.md))
@@ -179,8 +200,9 @@ Kotlin Android library and a TypeScript Expo module over it. You need Rust, Node
 <details>
 <summary>Diagram sources</summary>
 
-The diagram is generated from [docs/src/architecture.diagram.json](docs/src/architecture.diagram.json)
-(editable scene: `docs/src/architecture.excalidraw`). Icons from [Iconify](https://iconify.design/):
+The diagrams are generated from [docs/src/architecture.diagram.json](docs/src/architecture.diagram.json)
+and [docs/src/trust-flow.diagram.json](docs/src/trust-flow.diagram.json) (editable scenes:
+`docs/src/*.excalidraw`). Icons from [Iconify](https://iconify.design/):
 
 | Icon | File | Set | Author | License | Source |
 | --- | --- | --- | --- | --- | --- |
@@ -188,6 +210,7 @@ The diagram is generated from [docs/src/architecture.diagram.json](docs/src/arch
 | `mdi:server` | `docs/assets/icons/mdi--server.svg` | Material Design Icons | Pictogrammers | Apache 2.0 | https://api.iconify.design/mdi/server.svg?color=%23364fc7 |
 | `mdi:transit-connection-variant` | `docs/assets/icons/mdi--transit-connection-variant.svg` | Material Design Icons | Pictogrammers | Apache 2.0 | https://api.iconify.design/mdi/transit-connection-variant.svg?color=%23d9480f |
 | `simple-icons:firebase` | `docs/assets/icons/simple-icons--firebase.svg` | Simple Icons | Simple Icons Collaborators | CC0 1.0 | https://api.iconify.design/simple-icons/firebase.svg?color=%23a61e4d |
+| `mdi:server-off` | `docs/assets/icons/mdi--server-off.svg` | Material Design Icons | Pictogrammers | Apache 2.0 | https://api.iconify.design/mdi/server-off.svg?color=%23c92a2a |
 | `simple-icons:apple` | `docs/assets/icons/simple-icons--apple.svg` | Simple Icons | Simple Icons Collaborators | CC0 1.0 | https://api.iconify.design/simple-icons/apple.svg?color=%23495057 |
 
 </details>

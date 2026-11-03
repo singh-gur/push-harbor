@@ -1,0 +1,120 @@
+{
+  "title": "Pushharbor: who can send to a device",
+  "subtitle": "Servers have no accounts; each endpoint accepts only the key its app bound at registration",
+  "style": "clean",
+  "iconsDir": "../assets/icons",
+  "nodes": [
+    {
+      "id": "app",
+      "col": 0,
+      "row": 0,
+      "kind": "client",
+      "label": "App on the device",
+      "sublabel": "starts registration, decrypts",
+      "icon": "mdi--cellphone.svg"
+    },
+    {
+      "id": "server",
+      "col": 2,
+      "row": 0,
+      "kind": "service",
+      "label": "User's server",
+      "sublabel": "holds the VAPID private key",
+      "icon": "mdi--server.svg"
+    },
+    {
+      "id": "fcm",
+      "col": 0,
+      "row": 1,
+      "kind": "external",
+      "label": "FCM",
+      "sublabel": "your Firebase project only",
+      "icon": "simple-icons--firebase.svg"
+    },
+    {
+      "id": "relay",
+      "col": 1,
+      "row": 1,
+      "kind": "accent",
+      "label": "Pushharbor relay",
+      "sublabel": "endpoint bound to one key",
+      "icon": "mdi--transit-connection-variant.svg"
+    },
+    {
+      "id": "foreign",
+      "col": 2,
+      "row": 1,
+      "label": "Any other server",
+      "sublabel": "not given this endpoint",
+      "icon": "mdi--server-off.svg",
+      "fill": "#ffe3e3",
+      "stroke": "#c92a2a"
+    }
+  ],
+  "edges": [
+    {
+      "from": "server",
+      "to": "app",
+      "label": "1 VAPID public key / 5 subscription",
+      "bidirectional": true
+    },
+    {
+      "from": "app",
+      "to": "relay",
+      "label": "2 register / 4 confirm",
+      "bidirectional": true,
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "from": "server",
+      "to": "relay",
+      "label": "6 Web Push, bound key",
+      "kind": "secure",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "from": "relay",
+      "to": "fcm",
+      "label": "3 challenge / 7 ciphertext",
+      "kind": "data",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "from": "fcm",
+      "to": "app",
+      "label": "3 challenge / 7 notification",
+      "kind": "data",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "foreign",
+      "to": "relay",
+      "label": "403: key not bound",
+      "color": "#c92a2a",
+      "labelColor": "#c92a2a",
+      "strokeStyle": "dashed",
+      "fromSide": "left",
+      "toSide": "right"
+    }
+  ],
+  "legend": [
+    {
+      "edgeKind": "secure",
+      "label": "Signed by the bound VAPID key"
+    },
+    {
+      "edgeKind": "data",
+      "label": "Through FCM"
+    }
+  ],
+  "note": "The app answers only challenges for registrations it started, so knowing a device's FID is not enough to register it. Anything without the bound key is rejected.",
+  "layout": {
+    "laneStep": 48,
+    "colGap": 200,
+    "nodeWidth": 230
+  }
+}
