@@ -5,7 +5,8 @@ name: Release
 # io.github.singh-gur:pushharbor-android to Maven Central. crates.io and npm use trusted
 # publishing (OIDC, no stored tokens); Maven Central has none, so it uses the user token and PGP
 # key stored as `release` environment secrets. Publishing waits for approval in the `release`
-# environment. Versions already on a registry are skipped, so re-running is safe.
+# environment. Versions already on a registry are skipped, so re-running is safe. When all of
+# that succeeded, a draft GitHub release is created for review (github-release).
 # Manual runs only build the image, without pushing it; with `maven_dry_run` they also upload the
 # Android library to Maven Central under a throwaway -dryrun version, wait for validation and
 # drop it again (nothing is published). The `release` environment only accepts `v*` tags, so start
@@ -258,3 +259,28 @@ jobs:
             esac
           done
           echo "still $state after 10 min; see https://central.sonatype.com/publishing/deployments"; exit 1
+
+  # The GitHub release page once everything is published: a draft with install lines and the
+  # commits since the previous release (scripts/release-notes.sh), to review and publish by hand.
+  github-release:
+    needs: [image, crates-publish, npm-publish, maven-publish]
+    if: startsWith(github.ref, 'refs/tags/v') && !inputs.maven_dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create a draft release (skipping one that exists)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists"; exit 0
+          fi
+          scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+            --title "Pushharbor $GITHUB_REF_NAME" --notes-file notes.md
