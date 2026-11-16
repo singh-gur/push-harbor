@@ -14,7 +14,8 @@ name: Release
 # check before publishing anything) and delete the tag afterwards.
 #
 # Jobs that can publish never install or compile third-party code (no npm install scripts, no
-# build.rs, no Gradle): unprivileged jobs build and verify, the publish jobs only sign and upload.
+# build.rs, no Gradle, no docker build): unprivileged jobs build and verify, the publish jobs only
+# sign and upload.
 on:
   push:
     tags: ["v*"]
@@ -29,11 +30,11 @@ permissions:
   contents: read
 
 jobs:
+  # Unprivileged: build the image (this compiles dependencies) into an OCI archive.
   image:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,22 +53,45 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       # shortcut: linux/amd64 only; add linux/arm64 (QEMU or an arm runner) when someone needs it.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=oci,dest=image.tar
           # No build cache on purpose: caches are shared with every workflow run on main, so a
           # release built from cache could include anything a CI job managed to write there.
           no-cache: true
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: image.tar
+          if-no-files-found: error
+
+  # Pushes the archive built above under each tag; skopeo ships with the runner.
+  image-publish:
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+      - name: Push to GHCR
+        env:
+          TAGS: ${{ needs.image.outputs.tags }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for tag in $TAGS; do
+            skopeo copy --all oci-archive:image.tar "docker://$tag"
+          done
 
   # Unprivileged: package and fully verify the crates (this compiles dependencies).
   crates-verify:
@@ -263,7 +287,7 @@ jobs:
   # The GitHub release page once everything is published: a draft with install lines and the
   # commits since the previous release (scripts/release-notes.sh), to review and publish by hand.
   github-release:
-    needs: [image, crates-publish, npm-publish, maven-publish]
+    needs: [image-publish, crates-publish, npm-publish, maven-publish]
     if: startsWith(github.ref, 'refs/tags/v') && !inputs.maven_dry_run
     runs-on: ubuntu-latest
     permissions:
