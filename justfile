@@ -182,6 +182,29 @@ run-native *args:
 # Everything CI runs
 ci: lint audit test test-wasm build-wasm
 
+# Bump every published version and the docs' install lines to <version> (e.g. 0.2.1), then check
+# them against the tag. Commit, let CI pass, push the tag v<version> and approve the release.
+release-prep version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    new={{version}}
+    old=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+    o=${old//./\\.}
+    sed -i "/^\[workspace.package\]/,/^\[/s/^version = \"$o\"/version = \"$new\"/" Cargo.toml
+    sed -i "s/pushharbor-core = { version = \"$o\"/pushharbor-core = { version = \"$new\"/" crates/native/Cargo.toml crates/worker/Cargo.toml
+    sed -i "s/^VERSION_NAME=.*/VERSION_NAME=$new/" packages/android/gradle.properties
+    sed -i "s/^version = '$o'/version = '$new'/; s/versionName \"$o\"/versionName \"$new\"/" packages/expo/android/build.gradle
+    sed -i "s/^version: $o/version: $new/; s/^appVersion: \"$o\"/appVersion: \"$new\"/" deploy/helm/pushharbor/Chart.yaml
+    sed -i "s/pushharbor-native:$o/pushharbor-native:$new/" deploy/cloudrun/service.yaml README.md
+    sed -i "s/pushharbor-android:$o/pushharbor-android:$new/" README.md docs/android.md
+    sed -i "s/\[v$o\](\(.*\)\/v$o)/[v$new](\1\/v$new)/" README.md
+    sed -i "s/PUSHHARBOR_VERSION=$o/PUSHHARBOR_VERSION=$new/" docs/deploy.md
+    (cd packages/expo && npm version "$new" --no-git-tag-version --allow-same-version >/dev/null)
+    cargo update --workspace --quiet
+    scripts/check-release-version.sh "v$new"
+    echo "Left at $old (review; lockfiles and spec vectors excluded):"
+    git grep -n "$o" -- ':!*.lock' ':!*package-lock.json' ':!docs/spec/vectors' ':!plans' || true
+
 # Android library: Kotlin unit tests (spec vectors) and build, plus the native example app.
 # Without examples/android/app/google-services.json a placeholder is used (enough to build, not to receive pushes).
 test-android:
