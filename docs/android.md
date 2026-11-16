@@ -21,7 +21,7 @@ The library is on Maven Central. In your app module:
 
 ```groovy
 dependencies {
-  implementation("io.github.singh-gur:pushharbor-android:0.2.0")
+  implementation("io.github.singh-gur:pushharbor-android:0.2.1")
 }
 ```
 

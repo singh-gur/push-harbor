@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'dev.pushharbor.expo'
-version = '0.2.0'
+version = '0.2.1'
 
 android {
   namespace "dev.pushharbor.expo"
   defaultConfig {
     versionCode 1
-    versionName "0.2.0"
+    versionName "0.2.1"
   }
   lintOptions {
     abortOnError false

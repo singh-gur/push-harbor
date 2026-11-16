@@ -87,7 +87,7 @@ docker compose up -d
 - The DNS name must point at the host and ports 80/443 must be reachable for Caddy's certificate.
 - The service-account file must be readable by UID 65532 inside the container (hence `644`; the
   `700` directory keeps other users on the host out).
-- Pin a version with `PUSHHARBOR_VERSION=0.2.0`. Upgrade: `docker compose pull && docker compose up -d`.
+- Pin a version with `PUSHHARBOR_VERSION=0.2.1`. Upgrade: `docker compose pull && docker compose up -d`.
 - Back up the `data` volume (SQLite) or use the export API.
 - One instance only: rate limits live in its memory. For more, use PostgreSQL (Helm, Cloud Run).
 
@@ -142,6 +142,9 @@ gcloud run services add-iam-policy-binding pushharbor --region=REGION \
   --member=allUsers --role=roles/run.invoker
 ```
 
+- Deployed before 0.2.1 (default compute identity)? Create the service account and its grants
+  above before the next `services replace`, then remove the project-wide
+  `secretmanager.secretAccessor` grant from the default compute service account.
 - Map the origin's domain to the service (Cloud Run domain mapping or a load balancer). Behind
   an external Application Load Balancer set `PUSHHARBOR_TRUST_PROXY` to 2 and the ingress
   annotation to `internal-and-cloud-load-balancing`; otherwise requests to the `run.app` URL
