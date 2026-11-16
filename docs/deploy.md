@@ -126,11 +126,15 @@ gcloud secrets create pushharbor-fcm-service-account --data-file=service-account
 printf 'postgres://pushharbor:PASSWORD@localhost/pushharbor?host=/cloudsql/PROJECT:REGION:INSTANCE' \
   | gcloud secrets create pushharbor-database-url --data-file=-
 
-# The service's runtime identity needs these roles:
+# A dedicated runtime identity (service.yaml's serviceAccountName) that can read only these two
+# secrets, not every secret in the project:
+gcloud iam service-accounts create pushharbor
 gcloud projects add-iam-policy-binding PROJECT \
-  --member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com --role=roles/cloudsql.client
-gcloud projects add-iam-policy-binding PROJECT \
-  --member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  --member=serviceAccount:pushharbor@PROJECT.iam.gserviceaccount.com --role=roles/cloudsql.client
+for secret in pushharbor-fcm-service-account pushharbor-database-url; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member=serviceAccount:pushharbor@PROJECT.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+done
 
 # Edit service.yaml (instance name, origin, image version), then:
 gcloud run services replace deploy/cloudrun/service.yaml --region=REGION
@@ -139,7 +143,9 @@ gcloud run services add-iam-policy-binding pushharbor --region=REGION \
 ```
 
 - Map the origin's domain to the service (Cloud Run domain mapping or a load balancer). Behind
-  an external Application Load Balancer set `PUSHHARBOR_TRUST_PROXY` to 2.
+  an external Application Load Balancer set `PUSHHARBOR_TRUST_PROXY` to 2 and the ingress
+  annotation to `internal-and-cloud-load-balancing`; otherwise requests to the `run.app` URL
+  choose their own client address and get around per-IP limits.
 - Cloud Run pulls public GHCR images directly; Google recommends an Artifact Registry remote
   repository in front of `ghcr.io`.
 - This configuration is tested locally with the same container contract (no disk, secret file,

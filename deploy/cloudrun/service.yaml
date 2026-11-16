@@ -7,6 +7,7 @@ kind: Service
 metadata:
   name: pushharbor
   annotations:
+    # Behind an external Application Load Balancer: internal-and-cloud-load-balancing.
     run.googleapis.com/ingress: all
 spec:
   template:
@@ -15,6 +16,8 @@ spec:
         run.googleapis.com/cloudsql-instances: PROJECT:REGION:INSTANCE
         autoscaling.knative.dev/maxScale: "10"
     spec:
+      # Dedicated identity with access to only its two secrets (docs/deploy.md#cloud-run).
+      serviceAccountName: pushharbor@PROJECT.iam.gserviceaccount.com
       containerConcurrency: 80
       timeoutSeconds: 60
       containers:
