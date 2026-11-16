@@ -52,10 +52,22 @@ async fn fetch(mut req: Request, env: Env, _ctx: worker::Context) -> Result<Resp
     if !req.path().starts_with("/v1/") {
         return error_response(&Error::NotFound);
     }
+    // Oversized bodies stop here so they never reach the one Durable Object.
+    let limit = body_limit(&req.path());
+    let declared = req.headers().get("Content-Length")?;
+    if declared
+        .and_then(|len| len.parse::<usize>().ok())
+        .is_some_and(|len| len > limit)
+    {
+        return error_response(&Error::PayloadTooLarge);
+    }
     let headers = req.headers().clone();
     let ip = headers.get("CF-Connecting-IP")?.unwrap_or_default();
     headers.set(CLIENT_IP, &ip)?;
     let body = req.bytes().await?;
+    if body.len() > limit {
+        return error_response(&Error::PayloadTooLarge);
+    }
     let mut init = RequestInit::new();
     init.with_method(req.method()).with_headers(headers);
     if !body.is_empty() {
@@ -81,6 +93,14 @@ async fn fetch(mut req: Request, env: Env, _ctx: worker::Context) -> Result<Resp
             .write_to(&metrics);
     }
     Ok(response)
+}
+
+fn body_limit(path: &str) -> usize {
+    if path == "/v1/admin/import" {
+        MAX_IMPORT_BYTES
+    } else {
+        MAX_REQUEST_BYTES
+    }
 }
 
 /// The route of an API path without its IDs (endpoint IDs and rids are capabilities).
@@ -200,12 +220,7 @@ impl DurableObject for RelayObject {
         }
 
         let body = req.bytes().await?;
-        let limit = if req.path() == "/v1/admin/import" {
-            MAX_IMPORT_BYTES
-        } else {
-            MAX_REQUEST_BYTES
-        };
-        if body.len() > limit {
+        if body.len() > body_limit(&req.path()) {
             return error_response(&Error::PayloadTooLarge);
         }
         let (store, limiter, cache) = (DoStore(&sql), DoRateLimiter(&sql), DoTokenCache(&sql));

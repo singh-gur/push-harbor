@@ -101,6 +101,21 @@ async fn payload_cap_boundary() {
 }
 
 #[tokio::test]
+async fn oversized_request_rejected() {
+    let r = relay!();
+    // Above the 64 KiB request limit of every adapter (the admin import has its own).
+    let response = r
+        .http
+        .post(format!("{}/v1/registrations", r.base))
+        .header("Content-Type", "application/json")
+        .body(vec![b' '; 64 * 1024 + 1])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 413);
+}
+
+#[tokio::test]
 async fn malformed_sends() {
     let r = relay!();
     let sender = new_sender();
