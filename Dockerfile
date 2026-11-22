@@ -6,7 +6,7 @@
 #          -v ./service-account.json:/run/secrets/fcm.json:ro pushharbor-native
 # Several instances / no persistent disk: -e PUSHHARBOR_DATABASE_URL=postgres://user:pass@host/db
 
-FROM rust:1.99-slim-trixie@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247 AS build
+FROM rust:1.100-slim-trixie@sha256:6f14b2b4b278ec0d50aa1d69541c304ce0f95e0f6268487aa9924af1c2e9aebe AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
